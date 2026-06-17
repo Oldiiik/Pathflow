@@ -8,4 +8,13 @@
   Run `npm i` to install the dependencies.
 
   Run `npm run dev` to start the development server.
+
+  ## Pathflow development
+
+  The website and API run on separate ports:
+
+  - Website: `http://127.0.0.1:5173`
+  - API health: `http://127.0.0.1:8787/health`
+
+  See `docs/dev-workflow.md` for setup, env rules, verification commands, and debugging.
   

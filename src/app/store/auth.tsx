@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, SERVER_BASE } from "../lib/supabaseClient";
+import { backendPublicRequest, backendRequest, useNodeWorkspaceApi } from "../lib/backendClient";
 import { publicAnonKey } from "/utils/supabase/info";
 import type { UserProfile } from "../lib/types";
 
@@ -26,6 +27,11 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 async function loadProfile(accessToken: string): Promise<UserProfile | null> {
   try {
+    if (useNodeWorkspaceApi) {
+      const data = await backendRequest<{ profile: UserProfile | null }>("/profile", { accessToken });
+      return data.profile;
+    }
+
     const res = await fetch(`${SERVER_BASE}/profile`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
@@ -82,6 +88,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signUp = useCallback(
     async (input: SignUpInput) => {
+      if (useNodeWorkspaceApi) {
+        await backendPublicRequest<{ ok: true; userId: string }>("/auth/signup", {
+          method: "POST",
+          body: input,
+        });
+        await signIn(input.email, input.password);
+        return;
+      }
+
       const res = await fetch(`${SERVER_BASE}/signup`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${publicAnonKey}` },

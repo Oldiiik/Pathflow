@@ -9,6 +9,7 @@
 
 import { seedObject, recommendCourses as recommendCoursesLocal, allCourses } from "../mockData";
 import { fetchUniversityBio, fetchProjectReview } from "../api";
+import { backendRequest, useNodeWorkspaceApi } from "../backendClient";
 import type {
   Course,
   MemoryState,
@@ -74,6 +75,38 @@ export const localWorkspaceService: WorkspaceService = {
   },
 };
 
+// Backend-backed persistence. Keep this small: pages and stores continue using
+// WorkspaceService, while the transport can move from localStorage to Node API.
+export const apiWorkspaceService: WorkspaceService = {
+  async load() {
+    const data = await backendRequest<{ workspace: PersistedWorkspace }>("/workspace");
+    return data.workspace;
+  },
+  async save(_userId, data) {
+    await backendRequest<{ workspace: PersistedWorkspace }>("/workspace", {
+      method: "PUT",
+      body: data,
+    });
+  },
+  async clear(_userId) {
+    await backendRequest<{ workspace: PersistedWorkspace }>("/workspace", {
+      method: "PUT",
+      body: {
+        objects: [],
+        memory: {
+          goals: [],
+          savedUniversities: [],
+          preferredPaths: [],
+          avoidedPaths: [],
+          openGaps: [],
+          nextSteps: [],
+        },
+        roadmap: [],
+      },
+    });
+  },
+};
+
 // Mock generation is synchronous today, but the interface is async so a backend
 // implementation can fetch over the network without touching callers.
 export const mockDataService: DataService = {
@@ -87,5 +120,7 @@ export const mockDataService: DataService = {
 };
 
 // ── Active services (the single swap point for a real backend) ───────────────
-export const workspaceService: WorkspaceService = localWorkspaceService;
+export const workspaceService: WorkspaceService = useNodeWorkspaceApi
+  ? apiWorkspaceService
+  : localWorkspaceService;
 export const dataService: DataService = mockDataService;

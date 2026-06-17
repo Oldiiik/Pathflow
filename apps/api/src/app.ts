@@ -5,6 +5,7 @@ import { ZodError } from "zod";
 import { env } from "./config/env.js";
 import { HttpError } from "./lib/httpError.js";
 import { authPlugin } from "./plugins/auth.js";
+import { accountRoutes } from "./routes/account.js";
 import { healthRoutes } from "./routes/health.js";
 import { workspaceRoutes } from "./routes/workspace.js";
 
@@ -58,6 +59,7 @@ export async function buildApp() {
 
   await app.register(authPlugin);
   await app.register(healthRoutes);
+  await app.register(accountRoutes);
   await app.register(workspaceRoutes);
 
   return app;
