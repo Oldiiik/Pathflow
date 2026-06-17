@@ -5,7 +5,10 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
-    "dev": "vite"
+    "dev": "vite",
+    "dev:api": "npm run dev --prefix apps/api",
+    "build:api": "npm run build --prefix apps/api",
+    "typecheck:api": "npm run typecheck --prefix apps/api"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",
