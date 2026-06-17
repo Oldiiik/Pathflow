@@ -11,9 +11,12 @@ import { workspaceRoutes } from "./routes/workspace.js";
 
 export async function buildApp() {
   const app = Fastify({
-    logger: {
-      level: env.NODE_ENV === "production" ? "info" : "debug",
-    },
+    logger:
+      env.NODE_ENV === "test"
+        ? false
+        : {
+            level: env.NODE_ENV === "production" ? "info" : "debug",
+          },
     bodyLimit: 512 * 1024,
   });
 

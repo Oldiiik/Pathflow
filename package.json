@@ -9,7 +9,8 @@
     "dev:api": "npm run dev --prefix apps/api",
     "build:api": "npm run build --prefix apps/api",
     "typecheck:api": "npm run typecheck --prefix apps/api",
-    "verify": "npm run build && npm run typecheck:api && npm run build:api"
+    "test:api": "npm run verify --prefix apps/api",
+    "verify": "npm run build && npm run test:api"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",
