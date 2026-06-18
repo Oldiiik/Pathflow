@@ -138,6 +138,17 @@ if (accessToken) {
   );
   if (!generated.res?.ok || generatedObject?.kind !== "university") failed = true;
 
+  const workspaceAfterGenerate = await authed("/workspace");
+  const generatedPersisted = workspaceAfterGenerate.body?.workspace?.objects?.some(
+    (object) => object.id === generatedObject?.id && object.kind === generatedObject?.kind,
+  );
+  printResult(
+    "GET /workspace after /data/generate",
+    Boolean(workspaceAfterGenerate.res?.ok && generatedPersisted),
+    JSON.stringify(workspaceAfterGenerate.body),
+  );
+  if (!workspaceAfterGenerate.res?.ok || !generatedPersisted) failed = true;
+
   const save = await authed("/workspace", {
     method: "PUT",
     body: JSON.stringify({
@@ -192,6 +203,20 @@ if (accessToken) {
     JSON.stringify(command.body),
   );
   if (!command.res?.ok || !command.body?.message?.text || !commandTools.length) failed = true;
+
+  const workspaceAfterCommand = await authed("/workspace");
+  const commandMessagePersisted = workspaceAfterCommand.body?.workspace?.messages?.some(
+    (message) => message.role === "system" && message.text === command.body?.message?.text,
+  );
+  const commandRoadmapPersisted = workspaceAfterCommand.body?.workspace?.roadmap?.some(
+    (task) => command.body?.roadmapSuggestions?.some((suggestion) => suggestion.id === task.id),
+  );
+  printResult(
+    "GET /workspace after /workspace/command",
+    Boolean(workspaceAfterCommand.res?.ok && commandMessagePersisted && commandRoadmapPersisted),
+    JSON.stringify(workspaceAfterCommand.body),
+  );
+  if (!workspaceAfterCommand.res?.ok || !commandMessagePersisted || !commandRoadmapPersisted) failed = true;
 
   if (smokeAiFeatures) {
     const universityBio = await authed("/ai/university-bio", {

@@ -70,7 +70,7 @@ type Action =
   | { type: "RESOLVE_TOOL"; kind: ObjectKind; objects: WorkspaceObject[] }
   | { type: "MERGE_MEMORY"; patch: Partial<MemoryState> }
   | { type: "HYDRATE"; data: PersistedWorkspace }
-  | { type: "ADD_TASKS"; tasks: TaskInput[] }
+  | { type: "ADD_TASKS"; tasks: RoadmapTask[] }
   | { type: "SET_TASK_STATUS"; id: string; status: TaskStatus }
   | { type: "REMOVE_TASK"; id: string }
   | { type: "DISMISS_OBJECT"; id: string }
@@ -144,15 +144,7 @@ function reducer(state: State, action: Action): State {
       };
     case "ADD_TASKS": {
       const existing = new Set(state.roadmap.map((t) => t.label));
-      const fresh: RoadmapTask[] = action.tasks
-        .filter((t) => t.label && !existing.has(t.label))
-        .map((t) => ({
-          id: uid("task"),
-          label: t.label,
-          status: "todo" as TaskStatus,
-          priority: t.priority ?? "medium",
-          context: t.context ?? "Task",
-        }));
+      const fresh = action.tasks.filter((t) => t.label && !existing.has(t.label));
       return { ...state, roadmap: [...state.roadmap, ...fresh] };
     }
     case "SET_TASK_STATUS":
@@ -314,9 +306,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const mergeRoadmapSnapshot = useCallback((current: RoadmapTask[], tasks: TaskInput[]): RoadmapTask[] => {
+  const buildFreshRoadmapTasks = useCallback((current: RoadmapTask[], tasks: TaskInput[]): RoadmapTask[] => {
     const existing = new Set(current.map((t) => t.label));
-    const fresh: RoadmapTask[] = tasks
+    return tasks
       .filter((t) => t.label && !existing.has(t.label))
       .map((t) => ({
         id: uid("task"),
@@ -325,7 +317,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         priority: t.priority ?? "medium",
         context: t.context ?? "Task",
       }));
-    return [...current, ...fresh];
   }, []);
 
   const submitMessage = useCallback((text: string) => {
@@ -342,7 +333,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       try {
         const plan = await dataService.planCommand(trimmed, memoryRef.current);
         const nextMemory = mergeMemorySnapshot(memoryRef.current, plan.memoryPatch);
-        const nextRoadmap = mergeRoadmapSnapshot(roadmapRef.current, plan.roadmapSuggestions);
+        const freshTasks = buildFreshRoadmapTasks(roadmapRef.current, plan.roadmapSuggestions);
+        const nextRoadmap = [...roadmapRef.current, ...freshTasks];
 
         dispatch({
           type: "MERGE_MEMORY",
@@ -360,7 +352,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           },
         });
         if (plan.roadmapSuggestions.length) {
-          dispatch({ type: "ADD_TASKS", tasks: plan.roadmapSuggestions });
+          dispatch({ type: "ADD_TASKS", tasks: freshTasks });
           roadmapRef.current = nextRoadmap;
         }
         saveSnapshot({
@@ -437,7 +429,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         });
       }
     }, 450);
-  }, [mergeFreshObjects, mergeMemorySnapshot, mergeRoadmapSnapshot, saveSnapshot]);
+  }, [buildFreshRoadmapTasks, mergeFreshObjects, mergeMemorySnapshot, saveSnapshot]);
 
   // Generate a tool's objects directly — pages are usable without the chat.
   const generateKind = useCallback((kind: ObjectKind) => {
@@ -481,18 +473,76 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   }, [mergeFreshObjects, mergeMemorySnapshot, saveSnapshot]);
 
   const mergeMemory = useCallback(
-    (patch: Partial<MemoryState>) => dispatch({ type: "MERGE_MEMORY", patch }),
-    []
+    (patch: Partial<MemoryState>) => {
+      const nextMemory = mergeMemorySnapshot(memoryRef.current, patch);
+      memoryRef.current = nextMemory;
+      dispatch({ type: "MERGE_MEMORY", patch });
+      saveSnapshot({
+        messages: messagesRef.current,
+        objects: objectsRef.current,
+        memory: nextMemory,
+        roadmap: roadmapRef.current,
+      });
+    },
+    [mergeMemorySnapshot, saveSnapshot],
   );
-  const addTasks = useCallback((tasks: TaskInput[]) => dispatch({ type: "ADD_TASKS", tasks }), []);
+  const addTasks = useCallback(
+    (tasks: TaskInput[]) => {
+      const freshTasks = buildFreshRoadmapTasks(roadmapRef.current, tasks);
+      if (!freshTasks.length) return;
+      const nextRoadmap = [...roadmapRef.current, ...freshTasks];
+      roadmapRef.current = nextRoadmap;
+      dispatch({ type: "ADD_TASKS", tasks: freshTasks });
+      saveSnapshot({
+        messages: messagesRef.current,
+        objects: objectsRef.current,
+        memory: memoryRef.current,
+        roadmap: nextRoadmap,
+      });
+    },
+    [buildFreshRoadmapTasks, saveSnapshot],
+  );
   const setTaskStatus = useCallback(
-    (id: string, status: TaskStatus) => dispatch({ type: "SET_TASK_STATUS", id, status }),
-    []
+    (id: string, status: TaskStatus) => {
+      const nextRoadmap = roadmapRef.current.map((task) => (task.id === id ? { ...task, status } : task));
+      roadmapRef.current = nextRoadmap;
+      dispatch({ type: "SET_TASK_STATUS", id, status });
+      saveSnapshot({
+        messages: messagesRef.current,
+        objects: objectsRef.current,
+        memory: memoryRef.current,
+        roadmap: nextRoadmap,
+      });
+    },
+    [saveSnapshot],
   );
-  const removeTask = useCallback((id: string) => dispatch({ type: "REMOVE_TASK", id }), []);
+  const removeTask = useCallback(
+    (id: string) => {
+      const nextRoadmap = roadmapRef.current.filter((task) => task.id !== id);
+      roadmapRef.current = nextRoadmap;
+      dispatch({ type: "REMOVE_TASK", id });
+      saveSnapshot({
+        messages: messagesRef.current,
+        objects: objectsRef.current,
+        memory: memoryRef.current,
+        roadmap: nextRoadmap,
+      });
+    },
+    [saveSnapshot],
+  );
   const dismissObject = useCallback(
-    (id: string) => dispatch({ type: "DISMISS_OBJECT", id }),
-    []
+    (id: string) => {
+      const nextObjects = objectsRef.current.filter((object) => object.id !== id);
+      objectsRef.current = nextObjects;
+      dispatch({ type: "DISMISS_OBJECT", id });
+      saveSnapshot({
+        messages: messagesRef.current,
+        objects: nextObjects,
+        memory: memoryRef.current,
+        roadmap: roadmapRef.current,
+      });
+    },
+    [saveSnapshot],
   );
   const openEvidence = useCallback(
     (target: EvidenceTarget) => dispatch({ type: "OPEN_EVIDENCE", target }),
