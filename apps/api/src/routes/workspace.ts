@@ -6,10 +6,18 @@ import { reserveAiUsage } from "../repositories/aiUsageRepository.js";
 import {
   appendWorkspaceMessage,
   applyMemoryPatch,
+  appendRoadmapTasks,
   loadWorkspace,
   logPipelineRun,
   saveWorkspace,
 } from "../repositories/workspaceRepository.js";
+
+let taskCounter = 0;
+
+function uid(prefix: string) {
+  taskCounter += 1;
+  return `${prefix}-${Date.now().toString(36)}-${taskCounter}`;
+}
 
 async function bestEffortLogPipelineRun(app: FastifyInstance, input: Parameters<typeof logPipelineRun>[0]) {
   try {
@@ -51,6 +59,14 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
       memory: body.memory ?? currentWorkspace.memory,
     });
     const memory = await applyMemoryPatch(user.id, result.memoryPatch);
+    const roadmapTasks = result.roadmapSuggestions.map((task) => ({
+      id: uid("task"),
+      label: task.label,
+      status: "todo" as const,
+      priority: task.priority,
+      context: task.context,
+    }));
+    await appendRoadmapTasks({ userId: user.id, tasks: roadmapTasks });
     const response = {
       userId: user.id,
       message: {
@@ -61,7 +77,7 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
       memory,
       memoryPatch: result.memoryPatch,
       tools: result.tools,
-      roadmapSuggestions: result.roadmapSuggestions,
+      roadmapSuggestions: roadmapTasks,
       ai: {
         model: result.model,
         usedFallback: result.usedFallback,

@@ -106,6 +106,48 @@ export async function saveWorkspace(userId: string, workspaceData: PersistedWork
   return loadWorkspace(userId);
 }
 
+export async function appendWorkspaceObjects(input: {
+  userId: string;
+  objects: WorkspaceObject[];
+}) {
+  if (process.env.NODE_ENV === "test") return;
+  if (!input.objects.length) return;
+  const workspace = await getOrCreateWorkspace(input.userId);
+  const result = await supabaseAdmin.from("workspace_objects").insert(
+    input.objects.map((object) => ({
+      id: object.id,
+      workspace_id: workspace.id,
+      user_id: input.userId,
+      kind: object.kind,
+      data: object.data,
+    })),
+  );
+
+  if (result.error) throw badRequest(result.error.message, "workspace_objects_save_failed");
+}
+
+export async function appendRoadmapTasks(input: {
+  userId: string;
+  tasks: RoadmapTask[];
+}) {
+  if (process.env.NODE_ENV === "test") return;
+  if (!input.tasks.length) return;
+  const workspace = await getOrCreateWorkspace(input.userId);
+  const result = await supabaseAdmin.from("roadmap_tasks").insert(
+    input.tasks.map((task) => ({
+      id: task.id,
+      workspace_id: workspace.id,
+      user_id: input.userId,
+      label: task.label,
+      status: task.status,
+      priority: task.priority,
+      context: task.context,
+    })),
+  );
+
+  if (result.error) throw badRequest(result.error.message, "roadmap_tasks_save_failed");
+}
+
 export async function applyMemoryPatch(userId: string, patch: MemoryPatch): Promise<MemoryState> {
   const workspace = await getOrCreateWorkspace(userId);
   const next = mergeMemoryPatch(workspace.memory, patch);
