@@ -205,10 +205,18 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const loadedExisting = useRef(false);
   const seeded = useRef(false);
   const memoryRef = useRef(initialMemory);
+  const objectsRef = useRef<WorkspaceObject[]>([]);
+  const roadmapRef = useRef<RoadmapTask[]>([]);
 
   useEffect(() => {
     memoryRef.current = state.memory;
   }, [state.memory]);
+  useEffect(() => {
+    objectsRef.current = state.objects;
+  }, [state.objects]);
+  useEffect(() => {
+    roadmapRef.current = state.roadmap;
+  }, [state.roadmap]);
 
   // Load this user's persisted workspace (or start fresh).
   useEffect(() => {
@@ -268,6 +276,52 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(timeout);
   }, [userId, state.objects, state.memory, state.roadmap]);
 
+  const saveSnapshot = useCallback(
+    (snapshot: PersistedWorkspace) => {
+      if (!userId || !hydrated.current) return;
+      workspaceService.save(userId, snapshot).catch((error) => {
+        console.error("workspace save failed:", error);
+      });
+    },
+    [userId],
+  );
+
+  const mergeFreshObjects = useCallback((current: WorkspaceObject[], incoming: WorkspaceObject[]) => {
+    const existingIds = new Set(current.map((o) => o.id));
+    return [...incoming.filter((o) => !existingIds.has(o.id)), ...current];
+  }, []);
+
+  const mergeMemorySnapshot = useCallback((current: MemoryState, patch: Partial<MemoryState>): MemoryState => {
+    return {
+      goals: patch.goals ? uniquePush(current.goals, patch.goals) : current.goals,
+      savedUniversities: patch.savedUniversities
+        ? uniquePush(current.savedUniversities, patch.savedUniversities)
+        : current.savedUniversities,
+      preferredPaths: patch.preferredPaths
+        ? uniquePush(current.preferredPaths, patch.preferredPaths)
+        : current.preferredPaths,
+      avoidedPaths: patch.avoidedPaths
+        ? uniquePush(current.avoidedPaths, patch.avoidedPaths)
+        : current.avoidedPaths,
+      openGaps: patch.openGaps ? uniquePush(current.openGaps, patch.openGaps) : current.openGaps,
+      nextSteps: patch.nextSteps ? uniquePush(current.nextSteps, patch.nextSteps) : current.nextSteps,
+    };
+  }, []);
+
+  const mergeRoadmapSnapshot = useCallback((current: RoadmapTask[], tasks: TaskInput[]): RoadmapTask[] => {
+    const existing = new Set(current.map((t) => t.label));
+    const fresh: RoadmapTask[] = tasks
+      .filter((t) => t.label && !existing.has(t.label))
+      .map((t) => ({
+        id: uid("task"),
+        label: t.label,
+        status: "todo",
+        priority: t.priority ?? "medium",
+        context: t.context ?? "Task",
+      }));
+    return [...current, ...fresh];
+  }, []);
+
   const submitMessage = useCallback((text: string) => {
     const trimmed = text.trim();
     if (!trimmed) return;
@@ -281,10 +335,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     window.setTimeout(async () => {
       try {
         const plan = await dataService.planCommand(trimmed, memoryRef.current);
+        const nextMemory = mergeMemorySnapshot(memoryRef.current, plan.memoryPatch);
+        const nextRoadmap = mergeRoadmapSnapshot(roadmapRef.current, plan.roadmapSuggestions);
+
         dispatch({
           type: "MERGE_MEMORY",
           patch: plan.memoryPatch,
         });
+        memoryRef.current = nextMemory;
 
         dispatch({
           type: "ADD_MESSAGE",
@@ -297,7 +355,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         });
         if (plan.roadmapSuggestions.length) {
           dispatch({ type: "ADD_TASKS", tasks: plan.roadmapSuggestions });
+          roadmapRef.current = nextRoadmap;
         }
+        saveSnapshot({
+          objects: objectsRef.current,
+          memory: nextMemory,
+          roadmap: nextRoadmap,
+        });
+
         dispatch({ type: "ADD_CHIPS", chips: plan.chips });
         dispatch({
           type: "START_PROCESSING",
@@ -309,8 +374,19 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           window.setTimeout(async () => {
             try {
               const objects = await dataService.generate(chip.kind);
+              const nextObjects = mergeFreshObjects(objectsRef.current, objects);
+              objectsRef.current = nextObjects;
               dispatch({ type: "RESOLVE_CHIP", chipId: chip.id, kind: chip.kind, objects });
+              let nextMemoryForSave = memoryRef.current;
               if (chip.kind === "gapRadar") {
+                nextMemoryForSave = mergeMemorySnapshot(memoryRef.current, {
+                  openGaps: [
+                    "No international achievement",
+                    "Project metrics missing",
+                    "Weak essay narrative",
+                  ],
+                });
+                memoryRef.current = nextMemoryForSave;
                 dispatch({
                   type: "MERGE_MEMORY",
                   patch: {
@@ -322,6 +398,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
                   },
                 });
               }
+              saveSnapshot({
+                objects: nextObjects,
+                memory: nextMemoryForSave,
+                roadmap: roadmapRef.current,
+              });
             } catch (error) {
               const message = error instanceof Error ? error.message : "Tool generation failed.";
               dispatch({ type: "RESOLVE_CHIP", chipId: chip.id, kind: chip.kind, objects: [] });
@@ -348,7 +429,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         });
       }
     }, 450);
-  }, []);
+  }, [mergeFreshObjects, mergeMemorySnapshot, mergeRoadmapSnapshot, saveSnapshot]);
 
   // Generate a tool's objects directly — pages are usable without the chat.
   const generateKind = useCallback((kind: ObjectKind) => {
@@ -356,13 +437,25 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     window.setTimeout(async () => {
       try {
         const objects = await dataService.generate(kind);
+        const nextObjects = mergeFreshObjects(objectsRef.current, objects);
+        objectsRef.current = nextObjects;
         dispatch({ type: "RESOLVE_TOOL", kind, objects });
+        let nextMemoryForSave = memoryRef.current;
         if (kind === "gapRadar") {
+          nextMemoryForSave = mergeMemorySnapshot(memoryRef.current, {
+            openGaps: ["No international achievement", "Project metrics missing", "Weak essay narrative"],
+          });
+          memoryRef.current = nextMemoryForSave;
           dispatch({
             type: "MERGE_MEMORY",
             patch: { openGaps: ["No international achievement", "Project metrics missing", "Weak essay narrative"] },
           });
         }
+        saveSnapshot({
+          objects: nextObjects,
+          memory: nextMemoryForSave,
+          roadmap: roadmapRef.current,
+        });
       } catch (error) {
         const message = error instanceof Error ? error.message : "Tool generation failed.";
         dispatch({ type: "RESOLVE_TOOL", kind, objects: [] });
@@ -376,7 +469,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         });
       }
     }, 550);
-  }, []);
+  }, [mergeFreshObjects, mergeMemorySnapshot, saveSnapshot]);
 
   const mergeMemory = useCallback(
     (patch: Partial<MemoryState>) => dispatch({ type: "MERGE_MEMORY", patch }),
