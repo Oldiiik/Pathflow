@@ -8,7 +8,6 @@ import {
   type ReactNode,
 } from "react";
 import { useAuth } from "./auth";
-import { detectIntent } from "../lib/intent";
 import { uid } from "../lib/mockData";
 import { workspaceService, dataService, type PersistedWorkspace } from "../lib/services";
 import type {
@@ -203,6 +202,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const hydrated = useRef(false);
   const loadedExisting = useRef(false);
   const seeded = useRef(false);
+  const memoryRef = useRef(initialMemory);
+
+  useEffect(() => {
+    memoryRef.current = state.memory;
+  }, [state.memory]);
 
   // Load this user's persisted workspace (or start fresh).
   useEffect(() => {
@@ -255,50 +259,76 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       message: { id: uid("msg"), role: "user", text: trimmed },
     });
 
-    const intent = detectIntent(trimmed);
-
-    // Record memory side-effects immediately.
-    dispatch({
-      type: "MERGE_MEMORY",
-      patch: { avoidedPaths: intent.avoidedPaths, goals: intent.goals },
-    });
-
     // System acknowledgement.
-    window.setTimeout(() => {
-      dispatch({
-        type: "ADD_MESSAGE",
-        message: {
-          id: uid("msg"),
-          role: "system",
-          text: intent.systemMessage,
-          resultKinds: [...new Set(intent.chips.map((c) => c.kind))],
-        },
-      });
-      dispatch({ type: "ADD_CHIPS", chips: intent.chips });
-      dispatch({
-        type: "START_PROCESSING",
-        kinds: intent.chips.map((c) => c.kind),
-      });
+    window.setTimeout(async () => {
+      try {
+        const plan = await dataService.planCommand(trimmed, memoryRef.current);
+        dispatch({
+          type: "MERGE_MEMORY",
+          patch: plan.memoryPatch,
+        });
 
-      // Each chip expands into its workspace object after a short stagger.
-      intent.chips.forEach((chip, i) => {
-        window.setTimeout(async () => {
-          const objects = await dataService.generate(chip.kind);
-          dispatch({ type: "RESOLVE_CHIP", chipId: chip.id, kind: chip.kind, objects });
-          if (chip.kind === "gapRadar") {
-            dispatch({
-              type: "MERGE_MEMORY",
-              patch: {
-                openGaps: [
-                  "No international achievement",
-                  "Project metrics missing",
-                  "Weak essay narrative",
-                ],
-              },
-            });
-          }
-        }, 900 + i * 650);
-      });
+        dispatch({
+          type: "ADD_MESSAGE",
+          message: {
+            id: uid("msg"),
+            role: "system",
+            text: plan.systemMessage,
+            resultKinds: [...new Set(plan.chips.map((c) => c.kind))],
+          },
+        });
+        if (plan.roadmapSuggestions.length) {
+          dispatch({ type: "ADD_TASKS", tasks: plan.roadmapSuggestions });
+        }
+        dispatch({ type: "ADD_CHIPS", chips: plan.chips });
+        dispatch({
+          type: "START_PROCESSING",
+          kinds: plan.chips.map((c) => c.kind),
+        });
+
+        // Each chip expands into its workspace object after a short stagger.
+        plan.chips.forEach((chip, i) => {
+          window.setTimeout(async () => {
+            try {
+              const objects = await dataService.generate(chip.kind);
+              dispatch({ type: "RESOLVE_CHIP", chipId: chip.id, kind: chip.kind, objects });
+              if (chip.kind === "gapRadar") {
+                dispatch({
+                  type: "MERGE_MEMORY",
+                  patch: {
+                    openGaps: [
+                      "No international achievement",
+                      "Project metrics missing",
+                      "Weak essay narrative",
+                    ],
+                  },
+                });
+              }
+            } catch (error) {
+              const message = error instanceof Error ? error.message : "Tool generation failed.";
+              dispatch({ type: "RESOLVE_CHIP", chipId: chip.id, kind: chip.kind, objects: [] });
+              dispatch({
+                type: "ADD_MESSAGE",
+                message: {
+                  id: uid("msg"),
+                  role: "system",
+                  text: `I couldn't generate ${chip.label}: ${message}`,
+                },
+              });
+            }
+          }, 900 + i * 650);
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Command failed.";
+        dispatch({
+          type: "ADD_MESSAGE",
+          message: {
+            id: uid("msg"),
+            role: "system",
+            text: `I couldn't run that command: ${message}`,
+          },
+        });
+      }
     }, 450);
   }, []);
 
@@ -306,12 +336,25 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const generateKind = useCallback((kind: ObjectKind) => {
     dispatch({ type: "START_PROCESSING", kinds: [kind] });
     window.setTimeout(async () => {
-      const objects = await dataService.generate(kind);
-      dispatch({ type: "RESOLVE_TOOL", kind, objects });
-      if (kind === "gapRadar") {
+      try {
+        const objects = await dataService.generate(kind);
+        dispatch({ type: "RESOLVE_TOOL", kind, objects });
+        if (kind === "gapRadar") {
+          dispatch({
+            type: "MERGE_MEMORY",
+            patch: { openGaps: ["No international achievement", "Project metrics missing", "Weak essay narrative"] },
+          });
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Tool generation failed.";
+        dispatch({ type: "RESOLVE_TOOL", kind, objects: [] });
         dispatch({
-          type: "MERGE_MEMORY",
-          patch: { openGaps: ["No international achievement", "Project metrics missing", "Weak essay narrative"] },
+          type: "ADD_MESSAGE",
+          message: {
+            id: uid("msg"),
+            role: "system",
+            text: `I couldn't generate ${kind}: ${message}`,
+          },
         });
       }
     }, 550);

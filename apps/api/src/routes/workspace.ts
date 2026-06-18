@@ -1,7 +1,8 @@
-import type { FastifyPluginAsync } from "fastify";
+import type { FastifyInstance, FastifyPluginAsync } from "fastify";
 import { CommandRequestSchema, SaveWorkspaceRequestSchema } from "../domain/workspaceSchemas.js";
 import { parseBody } from "../lib/validate.js";
 import { runCommandPipeline } from "../ai/pipelines/commandPipeline.js";
+import { reserveAiUsage } from "../repositories/aiUsageRepository.js";
 import {
   appendWorkspaceMessage,
   applyMemoryPatch,
@@ -9,6 +10,14 @@ import {
   logPipelineRun,
   saveWorkspace,
 } from "../repositories/workspaceRepository.js";
+
+async function bestEffortLogPipelineRun(app: FastifyInstance, input: Parameters<typeof logPipelineRun>[0]) {
+  try {
+    await logPipelineRun(input);
+  } catch (error) {
+    app.log.warn({ err: error }, "Failed to record workspace command pipeline run");
+  }
+}
 
 export const workspaceRoutes: FastifyPluginAsync = async (app) => {
   app.get("/workspace", async (request) => {
@@ -28,6 +37,7 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
     const user = await app.requireUser(request);
     const body = parseBody(request, CommandRequestSchema);
     const start = Date.now();
+    await reserveAiUsage(user.id);
 
     await appendWorkspaceMessage({
       userId: user.id,
@@ -65,7 +75,7 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
       resultKinds: response.message.resultKinds,
     });
 
-    await logPipelineRun({
+    await bestEffortLogPipelineRun(app, {
       userId: user.id,
       pipeline: "workspace_command",
       model: result.model,

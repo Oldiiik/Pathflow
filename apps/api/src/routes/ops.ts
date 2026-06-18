@@ -28,35 +28,62 @@ function allTrue(record: Record<string, boolean>) {
   return Object.values(record).every(Boolean);
 }
 
+function falseKeys(record: Record<string, boolean>) {
+  return Object.entries(record)
+    .filter(([, ok]) => !ok)
+    .map(([key]) => key);
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export const opsRoutes: FastifyPluginAsync = async (app) => {
   app.get("/ops/readiness", async (request) => {
     requireOpsToken(request);
+    const envChecks = {
+      geminiApiKey: Boolean(env.GEMINI_API_KEY),
+      opsToken: Boolean(env.OPS_TOKEN),
+    };
 
     const checks = {
-      env: {
-        geminiApiKey: Boolean(env.GEMINI_API_KEY),
-        opsToken: Boolean(env.OPS_TOKEN),
-      },
+      env: envChecks,
       schema: null as Awaited<ReturnType<typeof loadBackendReadinessSchema>> | null,
       database: {
         reachable: false,
+        error: null as string | null,
       },
     };
 
     try {
       checks.schema = await loadBackendReadinessSchema();
       checks.database.reachable = true;
-    } catch {
+    } catch (error) {
+      checks.database.error = errorMessage(error);
       return {
         status: "degraded",
         checks,
+        missing: {
+          env: falseKeys(envChecks),
+          schema: {
+            tables: [] as string[],
+            functions: [] as string[],
+          },
+        },
       };
     }
 
     const schemaOk = allTrue(checks.schema.tables) && allTrue(checks.schema.functions);
     return {
-      status: checks.env.geminiApiKey && schemaOk ? "ok" : "degraded",
+      status: checks.env.geminiApiKey && checks.env.opsToken && schemaOk ? "ok" : "degraded",
       checks,
+      missing: {
+        env: falseKeys(checks.env),
+        schema: {
+          tables: falseKeys(checks.schema.tables),
+          functions: falseKeys(checks.schema.functions),
+        },
+      },
     };
   });
 };

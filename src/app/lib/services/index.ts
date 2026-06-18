@@ -7,7 +7,8 @@
 // and swap the two exports at the bottom. Nothing else in the app changes.
 // ───────────────────────────────────────────────────────────────────────────
 
-import { seedObject, recommendCourses as recommendCoursesLocal, allCourses } from "../mockData";
+import { seedObject, recommendCourses as recommendCoursesLocal, allCourses, uid } from "../mockData";
+import { detectIntent } from "../intent";
 import { fetchUniversityBio, fetchProjectReview } from "../api";
 import { backendRequest, useNodeWorkspaceApi } from "../backendClient";
 import type {
@@ -21,6 +22,14 @@ import type {
   UserProfile,
   WorkspaceObject,
 } from "../types";
+
+const CHIP_LABELS: Record<ObjectKind, string> = {
+  university: "University Match",
+  majorFit: "Major Fit",
+  gapRadar: "Gap Radar",
+  opportunity: "Opportunity",
+  portfolio: "Portfolio Diagnosis",
+};
 
 // What a user's workspace looks like when persisted.
 export interface PersistedWorkspace {
@@ -36,8 +45,20 @@ export interface WorkspaceService {
   clear(userId: string): Promise<void>;
 }
 
+export interface CommandPlan {
+  systemMessage: string;
+  memoryPatch: Partial<MemoryState>;
+  chips: { id: string; label: string; kind: ObjectKind }[];
+  roadmapSuggestions: {
+    label: string;
+    priority?: "high" | "medium" | "low";
+    context?: string;
+  }[];
+}
+
 // Data + AI — generates workspace objects and runs AI features.
 export interface DataService {
+  planCommand(message: string, memory: MemoryState): Promise<CommandPlan>;
   generate(kind: ObjectKind): Promise<WorkspaceObject[]>;
   universityBio(uni: Pick<UniversityData, "name" | "country" | "city">, memory: MemoryState): Promise<UniversityBio>;
   reviewProject(input: { name: string; description: string; link: string }, profile: UserProfile | null): Promise<ProjectReview>;
@@ -110,6 +131,18 @@ export const apiWorkspaceService: WorkspaceService = {
 // Mock generation is synchronous today, but the interface is async so a backend
 // implementation can fetch over the network without touching callers.
 export const mockDataService: DataService = {
+  async planCommand(message) {
+    const intent = detectIntent(message);
+    return {
+      systemMessage: intent.systemMessage,
+      memoryPatch: {
+        avoidedPaths: intent.avoidedPaths,
+        goals: intent.goals,
+      },
+      chips: intent.chips,
+      roadmapSuggestions: [],
+    };
+  },
   async generate(kind) {
     return seedObject(kind);
   },
@@ -119,7 +152,41 @@ export const mockDataService: DataService = {
   recommendCourses: recommendCoursesLocal,
 };
 
+interface ApiCommandResponse {
+  message: {
+    text: string;
+    resultKinds: ObjectKind[];
+  };
+  memoryPatch?: Partial<MemoryState>;
+  tools: {
+    kind: ObjectKind;
+    reason: string;
+    priority: "high" | "medium" | "low";
+  }[];
+  roadmapSuggestions?: {
+    label: string;
+    priority?: "high" | "medium" | "low";
+    context?: string;
+  }[];
+}
+
 export const apiDataService: DataService = {
+  async planCommand(message, memory) {
+    const data = await backendRequest<ApiCommandResponse>("/workspace/command", {
+      method: "POST",
+      body: { message, memory },
+    });
+    return {
+      systemMessage: data.message.text,
+      memoryPatch: data.memoryPatch ?? {},
+      chips: data.tools.map((tool) => ({
+        id: uid("chip"),
+        label: CHIP_LABELS[tool.kind],
+        kind: tool.kind,
+      })),
+      roadmapSuggestions: data.roadmapSuggestions ?? [],
+    };
+  },
   async generate(kind) {
     const data = await backendRequest<{ objects: WorkspaceObject[] }>("/data/generate", {
       method: "POST",

@@ -7,6 +7,7 @@ process.env.HOST = "127.0.0.1";
 process.env.FRONTEND_ORIGIN = "http://localhost:5173";
 process.env.SUPABASE_URL = "https://example.supabase.co";
 process.env.SUPABASE_SERVICE_ROLE_KEY = "test-service-role-key";
+process.env.GEMINI_API_KEY = "test-gemini-api-key";
 process.env.GEMINI_PIPELINE_MODEL = "gemini-3.1-flash-lite";
 process.env.AI_DAILY_REQUEST_LIMIT = "1";
 process.env.OPS_TOKEN = "test-ops-token-123";
@@ -76,6 +77,27 @@ test("API contract", async (t) => {
 
     assert.equal(res.statusCode, 401);
     assert.equal(res.json().error.code, "unauthorized");
+  });
+
+  await t.test("GET /ops/readiness returns deploy diagnostics with the ops bearer token", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/ops/readiness",
+      headers: {
+        authorization: "Bearer test-ops-token-123",
+      },
+    });
+
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.json().status, "ok");
+    assert.deepEqual(res.json().missing, {
+      env: [],
+      schema: {
+        tables: [],
+        functions: [],
+      },
+    });
+    assert.equal(res.json().checks.database.reachable, true);
   });
 
   await t.test("POST /ai/university-bio validates missing university name before model work", async () => {
@@ -170,6 +192,24 @@ test("API contract", async (t) => {
       payload: {
         name: "Admissions dashboard",
         description: "A small analytics dashboard for applicants.",
+      },
+    });
+
+    assert.equal(res.statusCode, 429);
+    assert.equal(res.json().error.code, "ai_daily_limit_exceeded");
+  });
+
+  await t.test("POST /workspace/command shares the AI daily request limit", async () => {
+    await reserveAiUsage("00000000-0000-4000-8000-000000000001");
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/workspace/command",
+      headers: {
+        authorization: "Bearer test-user-token",
+      },
+      payload: {
+        message: "I want to study business in Asia",
       },
     });
 

@@ -140,11 +140,15 @@ You can invite friends to test the connected frontend + backend loop after this 
 PATHFLOW_API_BASE=https://your-api-host OPS_TOKEN=your-ops-token npm run smoke:api
 ```
 
-Then run the connected smoke test. It creates a temporary smoke user, signs in through Supabase Auth, generates an MVP university object, saves workspace state, and reloads it:
+Then run the connected smoke test. It checks `/ops/readiness` when `OPS_TOKEN` is provided, creates a temporary smoke user, signs in through Supabase Auth, generates an MVP university object, saves workspace state, reloads it, and exercises `/workspace/command` once:
 
 ```bash
-PATHFLOW_API_BASE=https://your-api-host npm run smoke:connected
+PATHFLOW_API_BASE=https://your-api-host OPS_TOKEN=your-ops-token npm run smoke:connected
 ```
+
+For automatically generated smoke users, the script deletes the user at the end when `SUPABASE_SERVICE_ROLE_KEY` is available. Set `SMOKE_KEEP_USER=true` if you want to inspect the created account after a run.
+
+The command smoke step consumes one AI request reservation for the smoke user. Keep `AI_DAILY_REQUEST_LIMIT` at `1` or higher.
 
 - Frontend env points at that API:
 

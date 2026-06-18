@@ -5,9 +5,15 @@ import { createClient } from "@supabase/supabase-js";
 const apiBase = process.env.PATHFLOW_API_BASE ?? "http://127.0.0.1:8787";
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const opsToken = process.env.OPS_TOKEN;
 
+const generatedEmail = !process.env.SMOKE_EMAIL;
 const email = process.env.SMOKE_EMAIL ?? `pathflow-smoke-${Date.now()}-${randomUUID().slice(0, 8)}@example.com`;
 const password = process.env.SMOKE_PASSWORD ?? `Smoke-${randomUUID()}-9a`;
+const shouldCleanupUser =
+  process.env.SMOKE_DELETE_USER === "true" ||
+  (generatedEmail && process.env.SMOKE_KEEP_USER !== "true");
 
 function printResult(name, ok, detail) {
   const mark = ok ? "PASS" : "FAIL";
@@ -49,6 +55,23 @@ printResult(
 );
 if (!health.res?.ok) failed = true;
 
+if (opsToken) {
+  const readiness = await jsonRequest("/ops/readiness", {
+    headers: {
+      Authorization: `Bearer ${opsToken}`,
+    },
+  });
+  const ready = readiness.res?.ok && readiness.body?.status === "ok";
+  printResult(
+    "GET /ops/readiness",
+    Boolean(ready),
+    readiness.error instanceof Error ? readiness.error.message : JSON.stringify(readiness.body),
+  );
+  if (!ready) failed = true;
+} else {
+  printResult("GET /ops/readiness", true, "skipped because OPS_TOKEN is not set");
+}
+
 const signup = await jsonRequest("/auth/signup", {
   method: "POST",
   body: JSON.stringify({
@@ -60,6 +83,7 @@ const signup = await jsonRequest("/auth/signup", {
     avoid: "Olympiads",
   }),
 });
+const smokeUserId = signup.body?.userId;
 printResult(
   "POST /auth/signup",
   Boolean(signup.res?.ok),
@@ -144,6 +168,47 @@ if (accessToken) {
     JSON.stringify(workspace.body),
   );
   if (!workspace.res?.ok || savedObject?.kind !== "university") failed = true;
+
+  const command = await authed("/workspace/command", {
+    method: "POST",
+    body: JSON.stringify({
+      message: "I want to study business in Asia but avoid olympiads.",
+      memory: workspace.body?.workspace?.memory,
+    }),
+  });
+  const commandTools = command.body?.tools ?? [];
+  printResult(
+    "POST /workspace/command",
+    Boolean(
+      command.res?.ok &&
+        command.body?.message?.text &&
+        Array.isArray(commandTools) &&
+        commandTools.length > 0,
+    ),
+    JSON.stringify(command.body),
+  );
+  if (!command.res?.ok || !command.body?.message?.text || !commandTools.length) failed = true;
+}
+
+if (shouldCleanupUser && smokeUserId && supabaseServiceRoleKey) {
+  const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+  const cleanup = await supabaseAdmin.auth.admin.deleteUser(smokeUserId);
+  printResult(
+    "cleanup smoke user",
+    !cleanup.error,
+    cleanup.error?.message ?? smokeUserId,
+  );
+} else if (shouldCleanupUser && smokeUserId) {
+  printResult(
+    "cleanup smoke user",
+    true,
+    "skipped because SUPABASE_SERVICE_ROLE_KEY is not set",
+  );
 }
 
 if (failed) {
