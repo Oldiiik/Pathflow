@@ -104,6 +104,12 @@ Run the migration contract check directly:
 npm run migrations:check --prefix apps/api
 ```
 
+Before production deploy:
+
+```bash
+npm run deploy:check
+```
+
 ## Environment Rules
 
 Frontend `.env`:
@@ -111,6 +117,14 @@ Frontend `.env`:
 ```bash
 VITE_PATHFLOW_API_BASE=http://127.0.0.1:8787
 VITE_USE_NODE_WORKSPACE_API=false
+VITE_SUPABASE_PROJECT_ID=...
+VITE_SUPABASE_ANON_KEY=...
+```
+
+Sync local frontend Supabase env from `apps/api/.env`:
+
+```bash
+npm run env:sync:frontend
 ```
 
 API `.env`:
@@ -128,6 +142,12 @@ AI_DAILY_REQUEST_LIMIT=40
 OPS_TOKEN=...
 ```
 
+`FRONTEND_ORIGIN` supports comma-separated URLs for local plus deployed frontends:
+
+```bash
+FRONTEND_ORIGIN=http://localhost:5173,https://your-frontend.example.com
+```
+
 Check API/connected smoke env before a real backend run:
 
 ```bash
@@ -138,6 +158,29 @@ For an API-only check that does not require `SUPABASE_ANON_KEY`:
 
 ```bash
 ENV_CHECK_MODE=api npm run env:check --prefix apps/api
+```
+
+Before deploying the API, run the production env check:
+
+```bash
+npm run deploy:check --prefix apps/api
+```
+
+For deployed API services, use:
+
+```bash
+NODE_ENV=production
+HOST=0.0.0.0
+FRONTEND_ORIGIN=https://your-frontend.example.com
+```
+
+For deployed frontend services, use:
+
+```bash
+VITE_PATHFLOW_API_BASE=https://your-api-host
+VITE_USE_NODE_WORKSPACE_API=true
+VITE_SUPABASE_PROJECT_ID=your-project-ref
+VITE_SUPABASE_ANON_KEY=your-public-anon-key
 ```
 
 Only set `VITE_USE_NODE_WORKSPACE_API=true` when all of these are true:
@@ -181,7 +224,11 @@ SMOKE_AI_FEATURES=true npm run smoke:connected
 ```bash
 VITE_PATHFLOW_API_BASE=https://your-api-host
 VITE_USE_NODE_WORKSPACE_API=true
+VITE_SUPABASE_PROJECT_ID=your-project-ref
+VITE_SUPABASE_ANON_KEY=your-public-anon-key
 ```
+
+Production deploy instructions live in [docs/deploy.md](deploy.md).
 
 For the first friend test, verify these flows only:
 

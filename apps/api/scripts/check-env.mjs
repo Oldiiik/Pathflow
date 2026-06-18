@@ -14,6 +14,7 @@ const requiredForConnectedSmoke = [
   "SUPABASE_ANON_KEY",
 ];
 const mode = process.env.ENV_CHECK_MODE ?? "connected";
+const productionMode = mode === "production";
 
 function hasValue(key) {
   return typeof process.env[key] === "string" && process.env[key].trim().length > 0;
@@ -46,6 +47,13 @@ function checkUrl(key) {
   } catch {
     return { ok: false, detail: "invalid URL" };
   }
+}
+
+function frontendOrigins() {
+  if (!hasValue("FRONTEND_ORIGIN")) return [];
+  return process.env.FRONTEND_ORIGIN.split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
 }
 
 function decodeJwtPayload(value) {
@@ -126,6 +134,34 @@ if (!aiLimitOk) failed = true;
 
 const model = process.env.GEMINI_PIPELINE_MODEL ?? "gemini-3.1-flash-lite";
 printResult("env GEMINI_PIPELINE_MODEL", Boolean(model.trim()), model);
+
+if (productionMode) {
+  const nodeEnvOk = process.env.NODE_ENV === "production";
+  printResult("production NODE_ENV", nodeEnvOk, nodeEnvOk ? "production" : "must be production");
+  if (!nodeEnvOk) failed = true;
+
+  const host = process.env.HOST ?? "127.0.0.1";
+  const hostOk = host !== "127.0.0.1" && host !== "localhost";
+  printResult("production HOST", hostOk, hostOk ? host : "must not bind only to localhost");
+  if (!hostOk) failed = true;
+
+  const origins = frontendOrigins();
+  const publicHttpsOrigins = origins.filter((origin) => {
+    try {
+      const url = new URL(origin);
+      return url.protocol === "https:" && !["localhost", "127.0.0.1"].includes(url.hostname);
+    } catch {
+      return false;
+    }
+  });
+  const frontendOk = publicHttpsOrigins.length > 0;
+  printResult(
+    "production FRONTEND_ORIGIN",
+    frontendOk,
+    frontendOk ? `${publicHttpsOrigins.length} public HTTPS origin(s)` : "must include deployed HTTPS frontend origin",
+  );
+  if (!frontendOk) failed = true;
+}
 
 if (failed) {
   process.exitCode = 1;

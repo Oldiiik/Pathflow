@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: pathflow-api
+    runtime: node
+    rootDir: apps/api
+    plan: starter
+    region: frankfurt
+    buildCommand: npm ci && npm run deploy:check && npm run build
+    startCommand: npm run start
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: FRONTEND_ORIGIN
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_PIPELINE_MODEL
+        value: gemini-3.1-flash-lite
+      - key: AI_DAILY_REQUEST_LIMIT
+        value: 40
+      - key: OPS_TOKEN
+        sync: false

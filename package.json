@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.0.1",
   "type": "module",
+  "engines": {
+    "node": ">=22 <27"
+  },
   "scripts": {
     "build": "vite build",
     "dev": "vite",
@@ -12,6 +15,10 @@
     "test:api": "npm run verify --prefix apps/api",
     "smoke:api": "npm run smoke --prefix apps/api",
     "smoke:connected": "npm run smoke:connected --prefix apps/api",
+    "env:sync:frontend": "node scripts/sync-frontend-env.mjs",
+    "deploy:check:frontend": "ENV_CHECK_MODE=production node scripts/check-frontend-env.mjs",
+    "deploy:check:api": "npm run deploy:check --prefix apps/api",
+    "deploy:check": "npm run deploy:check:frontend && npm run deploy:check:api",
     "verify": "npm run build && npm run test:api"
   },
   "dependencies": {

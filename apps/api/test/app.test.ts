@@ -4,7 +4,7 @@ import test from "node:test";
 process.env.NODE_ENV = "test";
 process.env.PORT = "8787";
 process.env.HOST = "127.0.0.1";
-process.env.FRONTEND_ORIGIN = "http://localhost:5173";
+process.env.FRONTEND_ORIGIN = "http://localhost:5173,https://pathflow.example.com";
 process.env.SUPABASE_URL = "https://example.supabase.co";
 process.env.SUPABASE_SERVICE_ROLE_KEY = "test-service-role-key";
 process.env.GEMINI_API_KEY = "test-gemini-api-key";
@@ -36,6 +36,34 @@ test("API contract", async (t) => {
       service: "pathflow-api",
       model: "gemini-3.1-flash-lite",
     });
+  });
+
+  await t.test("CORS allows configured frontend origins", async () => {
+    const res = await app.inject({
+      method: "OPTIONS",
+      url: "/health",
+      headers: {
+        origin: "https://pathflow.example.com",
+        "access-control-request-method": "GET",
+      },
+    });
+
+    assert.equal(res.statusCode, 204);
+    assert.equal(res.headers["access-control-allow-origin"], "https://pathflow.example.com");
+  });
+
+  await t.test("CORS does not allow unknown frontend origins", async () => {
+    const res = await app.inject({
+      method: "OPTIONS",
+      url: "/health",
+      headers: {
+        origin: "https://unknown.example.com",
+        "access-control-request-method": "GET",
+      },
+    });
+
+    assert.equal(res.statusCode, 404);
+    assert.equal(res.headers["access-control-allow-origin"], undefined);
   });
 
   await t.test("protected routes return the unified unauthorized error without a bearer token", async () => {

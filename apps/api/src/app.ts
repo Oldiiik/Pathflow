@@ -12,6 +12,10 @@ import { healthRoutes } from "./routes/health.js";
 import { opsRoutes } from "./routes/ops.js";
 import { workspaceRoutes } from "./routes/workspace.js";
 
+function isAllowedOrigin(origin: string | undefined) {
+  return !origin || env.FRONTEND_ORIGIN.includes(origin);
+}
+
 export async function buildApp() {
   const app = Fastify({
     logger:
@@ -24,7 +28,9 @@ export async function buildApp() {
   });
 
   await app.register(cors, {
-    origin: env.FRONTEND_ORIGIN,
+    origin: (origin, callback) => {
+      callback(null, isAllowedOrigin(origin));
+    },
     credentials: true,
   });
 
