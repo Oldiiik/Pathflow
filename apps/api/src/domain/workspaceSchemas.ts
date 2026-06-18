@@ -21,9 +21,37 @@ export const MemoryStateSchema = z.object({
 
 export type MemoryState = z.infer<typeof MemoryStateSchema>;
 
-export const MemoryPatchSchema = MemoryStateSchema.partial();
+export const MemoryPatchSchema = z.object({
+  goals: z.array(z.string()).optional(),
+  savedUniversities: z.array(z.string()).optional(),
+  preferredPaths: z.array(z.string()).optional(),
+  avoidedPaths: z.array(z.string()).optional(),
+  openGaps: z.array(z.string()).optional(),
+  nextSteps: z.array(z.string()).optional(),
+});
 
 export type MemoryPatch = z.infer<typeof MemoryPatchSchema>;
+
+export function mergeMemoryPatch(current: MemoryState, patch: MemoryPatch): MemoryState {
+  const unique = (base: string[], additions: string[] | undefined) => {
+    if (!additions) return base;
+    const next = [...base];
+    for (const item of additions) {
+      const trimmed = item.trim();
+      if (trimmed && !next.includes(trimmed)) next.push(trimmed);
+    }
+    return next;
+  };
+
+  return {
+    goals: unique(current.goals, patch.goals),
+    savedUniversities: unique(current.savedUniversities, patch.savedUniversities),
+    preferredPaths: unique(current.preferredPaths, patch.preferredPaths),
+    avoidedPaths: unique(current.avoidedPaths, patch.avoidedPaths),
+    openGaps: unique(current.openGaps, patch.openGaps),
+    nextSteps: unique(current.nextSteps, patch.nextSteps),
+  };
+}
 
 export const emptyMemory = (): MemoryState => ({
   goals: [],

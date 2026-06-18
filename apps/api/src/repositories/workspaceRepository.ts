@@ -3,6 +3,7 @@ import { badRequest } from "../lib/httpError.js";
 import {
   MemoryStateSchema,
   PersistedWorkspaceSchema,
+  mergeMemoryPatch,
   type MemoryPatch,
   type MemoryState,
   type PersistedWorkspace,
@@ -13,27 +14,6 @@ import {
 interface WorkspaceRow {
   id: string;
   memory: unknown;
-}
-
-function mergeMemory(current: MemoryState, patch: MemoryPatch): MemoryState {
-  const unique = (base: string[], additions: string[] | undefined) => {
-    if (!additions) return base;
-    const next = [...base];
-    for (const item of additions) {
-      const trimmed = item.trim();
-      if (trimmed && !next.includes(trimmed)) next.push(trimmed);
-    }
-    return next;
-  };
-
-  return {
-    goals: unique(current.goals, patch.goals),
-    savedUniversities: unique(current.savedUniversities, patch.savedUniversities),
-    preferredPaths: unique(current.preferredPaths, patch.preferredPaths),
-    avoidedPaths: unique(current.avoidedPaths, patch.avoidedPaths),
-    openGaps: unique(current.openGaps, patch.openGaps),
-    nextSteps: unique(current.nextSteps, patch.nextSteps),
-  };
 }
 
 async function getOrCreateWorkspace(userId: string): Promise<{ id: string; memory: MemoryState }> {
@@ -150,7 +130,7 @@ export async function saveWorkspace(userId: string, workspaceData: PersistedWork
 
 export async function applyMemoryPatch(userId: string, patch: MemoryPatch): Promise<MemoryState> {
   const workspace = await getOrCreateWorkspace(userId);
-  const next = mergeMemory(workspace.memory, patch);
+  const next = mergeMemoryPatch(workspace.memory, patch);
   const result = await supabaseAdmin
     .from("workspaces")
     .update({ memory: next })

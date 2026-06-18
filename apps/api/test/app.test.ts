@@ -62,6 +62,36 @@ test("API contract", async (t) => {
     assert.match(res.json().error.message, /Invalid email address/);
   });
 
+  await t.test("POST /ai/university-bio validates missing university name before model work", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/ai/university-bio",
+      payload: {
+        name: "",
+        country: "Singapore",
+        city: "Singapore",
+      },
+    });
+
+    assert.equal(res.statusCode, 400);
+    assert.equal(res.json().error.code, "invalid_body");
+  });
+
+  await t.test("POST /ai/project-review requires at least a name or description", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/ai/project-review",
+      payload: {
+        name: "",
+        description: "",
+        link: "",
+      },
+    });
+
+    assert.equal(res.statusCode, 400);
+    assert.equal(res.json().error.code, "project_review_missing_input");
+  });
+
   await t.test("POST /workspace/command is protected before body validation or pipeline work", async () => {
     const res = await app.inject({
       method: "POST",

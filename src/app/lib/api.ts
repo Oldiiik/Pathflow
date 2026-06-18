@@ -1,4 +1,5 @@
 import { projectId, publicAnonKey } from "/utils/supabase/info";
+import { backendPublicRequest, useNodeWorkspaceApi } from "./backendClient";
 import type { MemoryState, ProjectReview, UniversityBio, UniversityData, UserProfile } from "./types";
 
 const BASE = `https://${projectId}.supabase.co/functions/v1/make-server-6885b96b`;
@@ -8,22 +9,33 @@ export async function fetchUniversityBio(
   uni: Pick<UniversityData, "name" | "country" | "city">,
   memory: MemoryState,
 ): Promise<UniversityBio> {
+  const payload = {
+    name: uni.name,
+    country: uni.country,
+    city: uni.city,
+    context: {
+      goals: memory.goals,
+      avoidedPaths: memory.avoidedPaths,
+      preferredPaths: memory.preferredPaths,
+      openGaps: memory.openGaps,
+    },
+  };
+
+  if (useNodeWorkspaceApi) {
+    const data = await backendPublicRequest<{ bio: UniversityBio }>("/ai/university-bio", {
+      method: "POST",
+      body: payload,
+    });
+    return data.bio;
+  }
+
   const res = await fetch(`${BASE}/university-bio`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${publicAnonKey}`,
     },
-    body: JSON.stringify({
-      name: uni.name,
-      country: uni.country,
-      city: uni.city,
-      context: {
-        goals: memory.goals,
-        avoidedPaths: memory.avoidedPaths,
-        preferredPaths: memory.preferredPaths,
-      },
-    }),
+    body: JSON.stringify(payload),
   });
 
   const data = await res.json().catch(() => ({}));
@@ -40,13 +52,23 @@ export async function fetchProjectReview(
   input: { name: string; description: string; link: string },
   profile: UserProfile | null,
 ): Promise<ProjectReview> {
+  const payload = {
+    ...input,
+    context: { field: profile?.field, preferredPaths: profile ? [profile.field] : [] },
+  };
+
+  if (useNodeWorkspaceApi) {
+    const data = await backendPublicRequest<{ review: ProjectReview }>("/ai/project-review", {
+      method: "POST",
+      body: payload,
+    });
+    return data.review;
+  }
+
   const res = await fetch(`${BASE}/project-review`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${publicAnonKey}` },
-    body: JSON.stringify({
-      ...input,
-      context: { field: profile?.field, preferredPaths: profile ? [profile.field] : [] },
-    }),
+    body: JSON.stringify(payload),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {

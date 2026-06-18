@@ -36,6 +36,13 @@ function titleCase(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1).trim();
 }
 
+function cleanAvoidedPath(value: string): string {
+  return value
+    .replace(/\b(?:and|but)\b.*$/i, "")
+    .replace(/\b(?:competitions?|projects?|programs?|events?)\b.*$/i, "$1")
+    .trim();
+}
+
 function fallbackPipeline(message: string): CommandPipelineResult {
   const lower = message.toLowerCase();
   const kinds = new Set<ObjectKind>();
@@ -46,8 +53,11 @@ function fallbackPipeline(message: string): CommandPipelineResult {
   if (kinds.size === 0) kinds.add("majorFit");
 
   const avoidedPaths: string[] = [];
-  const negation = message.match(/(?:don['’]?t|do not|dont)\s+(?:like|want|enjoy)\s+([a-z\s]+?)(?:[.,;!?]|and|but|$)/i);
-  if (negation?.[1]) avoidedPaths.push(titleCase(negation[1]));
+  const negation = message.match(/(?:don['’]?t|do not|dont)\s+(?:like|want|enjoy)\s+([a-z\s]+?)(?:[.,;!?]|$)/i);
+  if (negation?.[1]) {
+    const path = cleanAvoidedPath(negation[1]);
+    if (path) avoidedPaths.push(titleCase(path));
+  }
   if (/\b(no|avoid|hate)\s+olympiad/i.test(message)) avoidedPaths.push("Olympiads");
 
   const goals: string[] = [];
