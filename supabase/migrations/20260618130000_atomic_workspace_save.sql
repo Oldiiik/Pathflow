@@ -12,6 +12,8 @@ as $$
 declare
   v_workspace_id uuid;
 begin
+  perform pg_advisory_xact_lock(hashtextextended(p_user_id::text, 0));
+
   insert into public.workspaces (user_id, memory)
   values (p_user_id, coalesce(p_memory, '{}'::jsonb))
   on conflict (user_id) do update

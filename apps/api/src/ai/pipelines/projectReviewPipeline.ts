@@ -12,6 +12,19 @@ Rules:
 - If it is weak or under-explained, say so.
 - Return JSON only.`;
 
+const OUTPUT_CONTRACT = `Return exactly one JSON object with this shape:
+{
+  "admissionValue": "Moderate",
+  "summary": "Concise assessment.",
+  "strengths": ["Specific strength."],
+  "weaknesses": ["Specific weakness."],
+  "improvements": ["Concrete improvement."],
+  "rewrite": "Stronger admissions-facing rewrite."
+}
+
+Use admissionValue only: "Strong", "Moderate", "Weak", or "Under-explained".
+Do not return an array. Do not wrap the object in another key.`;
+
 export async function reviewProject(input: {
   name?: string;
   description?: string;
@@ -29,6 +42,8 @@ ${input.description || "(none)"}
 Student context:
 - Intended field: ${input.context?.field || "unknown"}
 - Preferred paths: ${(input.context?.preferredPaths ?? []).join(", ") || "project-based work"}
+
+${OUTPUT_CONTRACT}
 
 Return the admission-value review JSON now.`;
 

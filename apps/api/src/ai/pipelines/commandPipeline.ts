@@ -20,6 +20,24 @@ Rules:
 - Do not invent facts, universities, scores, or deadlines.
 - If the message is vague, choose majorFit as a useful starting tool.`;
 
+const OUTPUT_CONTRACT = `Return exactly one JSON object with this shape:
+{
+  "systemMessage": "Detected intent. Running 2 tools.",
+  "memoryPatch": {
+    "goals": ["Study business in Asia"],
+    "avoidedPaths": ["Olympiads"]
+  },
+  "tools": [
+    { "kind": "university", "reason": "The student mentioned studying in Asia.", "priority": "medium" },
+    { "kind": "majorFit", "reason": "The student mentioned business.", "priority": "medium" }
+  ],
+  "roadmapSuggestions": [
+    { "label": "Add measurable project outcomes", "priority": "high", "context": "Command" }
+  ]
+}
+
+Do not return an array. Do not wrap the object in another key. Use only valid tool kinds.`;
+
 const KEYWORDS: Record<ObjectKind, string[]> = {
   university: ["universit", "college", "school", "asia", "singapore", "hong kong", "korea", "japan", "usa", "abroad"],
   majorFit: ["major", "field", "study", "degree", "business", "analytics", "finance", "engineering", "computer", "cs"],
@@ -84,7 +102,7 @@ function fallbackPipeline(message: string): CommandPipelineResult {
 export async function runCommandPipeline(input: {
   message: string;
   memory?: Partial<MemoryState>;
-}): Promise<CommandPipelineResult & { usedFallback: boolean; model: string | null }> {
+}): Promise<CommandPipelineResult & { usedFallback: boolean; model: string | null; fallbackReason?: string }> {
   const memory = MemoryStateSchema.parse(input.memory ?? {});
 
   const prompt = `Student message:
@@ -92,6 +110,8 @@ ${input.message}
 
 Current memory:
 ${JSON.stringify(memory, null, 2)}
+
+${OUTPUT_CONTRACT}
 
 Return the command pipeline JSON now.`;
 
@@ -104,9 +124,10 @@ Return the command pipeline JSON now.`;
       temperature: 0.1,
     });
     return { ...result.data, usedFallback: false, model: result.model };
-  } catch {
+  } catch (error) {
     const fallback = fallbackPipeline(input.message);
-    return { ...fallback, usedFallback: true, model: null };
+    const fallbackReason = error instanceof Error ? error.message : String(error);
+    return { ...fallback, usedFallback: true, model: null, fallbackReason };
   }
 }
 

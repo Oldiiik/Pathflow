@@ -1,12 +1,16 @@
-import "dotenv/config";
+import { config } from "dotenv";
 import { randomUUID } from "node:crypto";
+import { resolve } from "node:path";
 import { createClient } from "@supabase/supabase-js";
+
+config({ path: resolve(import.meta.dirname, "../.env") });
 
 const apiBase = process.env.PATHFLOW_API_BASE ?? "http://127.0.0.1:8787";
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const opsToken = process.env.OPS_TOKEN;
+const smokeAiFeatures = process.env.SMOKE_AI_FEATURES === "true";
 
 const generatedEmail = !process.env.SMOKE_EMAIL;
 const email = process.env.SMOKE_EMAIL ?? `pathflow-smoke-${Date.now()}-${randomUUID().slice(0, 8)}@example.com`;
@@ -188,6 +192,26 @@ if (accessToken) {
     JSON.stringify(command.body),
   );
   if (!command.res?.ok || !command.body?.message?.text || !commandTools.length) failed = true;
+
+  if (smokeAiFeatures) {
+    const universityBio = await authed("/ai/university-bio", {
+      method: "POST",
+      body: JSON.stringify({
+        name: "National University of Singapore",
+        country: "Singapore",
+        city: "Singapore",
+        context: workspace.body?.workspace?.memory,
+      }),
+    });
+    printResult(
+      "POST /ai/university-bio",
+      Boolean(universityBio.res?.ok && universityBio.body?.bio?.positioning),
+      JSON.stringify(universityBio.body),
+    );
+    if (!universityBio.res?.ok || !universityBio.body?.bio?.positioning) failed = true;
+  } else {
+    printResult("POST /ai/university-bio", true, "skipped because SMOKE_AI_FEATURES is not true");
+  }
 }
 
 if (shouldCleanupUser && smokeUserId && supabaseServiceRoleKey) {

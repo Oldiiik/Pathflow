@@ -65,6 +65,7 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
       ai: {
         model: result.model,
         usedFallback: result.usedFallback,
+        fallbackReason: result.fallbackReason,
       },
     };
 

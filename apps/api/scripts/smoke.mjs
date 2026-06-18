@@ -1,4 +1,7 @@
-import "dotenv/config";
+import { config } from "dotenv";
+import { resolve } from "node:path";
+
+config({ path: resolve(import.meta.dirname, "../.env") });
 
 const apiBase = process.env.PATHFLOW_API_BASE ?? "http://127.0.0.1:8787";
 const opsToken = process.env.OPS_TOKEN;

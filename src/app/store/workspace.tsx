@@ -5,6 +5,7 @@ import {
   useEffect,
   useReducer,
   useRef,
+  useState,
   type ReactNode,
 } from "react";
 import { useAuth } from "./auth";
@@ -198,6 +199,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const { profile, session } = useAuth();
   const userId = session?.user?.id;
+  const [hydrationVersion, setHydrationVersion] = useState(0);
 
   const hydrated = useRef(false);
   const loadedExisting = useRef(false);
@@ -214,14 +216,24 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     let active = true;
     hydrated.current = false;
     loadedExisting.current = false;
-    workspaceService.load(userId).then((data) => {
-      if (!active) return;
-      if (data) {
-        dispatch({ type: "HYDRATE", data });
-        loadedExisting.current = true;
-      }
-      hydrated.current = true;
-    });
+    seeded.current = false;
+    workspaceService
+      .load(userId)
+      .then((data) => {
+        if (!active) return;
+        if (data) {
+          dispatch({ type: "HYDRATE", data });
+          loadedExisting.current = true;
+        }
+      })
+      .catch((error) => {
+        console.error("workspace load failed:", error);
+      })
+      .finally(() => {
+        if (!active) return;
+        hydrated.current = true;
+        setHydrationVersion((version) => version + 1);
+      });
     return () => {
       active = false;
     };
@@ -238,16 +250,22 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       type: "MERGE_MEMORY",
       patch: { goals, avoidedPaths: profile.avoid ? [profile.avoid] : [] },
     });
-  }, [profile, state.memory]);
+  }, [profile, hydrationVersion]);
 
   // Persist on every meaningful change (once hydration has settled).
   useEffect(() => {
     if (!userId || !hydrated.current) return;
-    workspaceService.save(userId, {
-      objects: state.objects,
-      memory: state.memory,
-      roadmap: state.roadmap,
-    });
+    const timeout = window.setTimeout(() => {
+      workspaceService.save(userId, {
+        objects: state.objects,
+        memory: state.memory,
+        roadmap: state.roadmap,
+      }).catch((error) => {
+        console.error("workspace save failed:", error);
+      });
+    }, 350);
+
+    return () => window.clearTimeout(timeout);
   }, [userId, state.objects, state.memory, state.roadmap]);
 
   const submitMessage = useCallback((text: string) => {

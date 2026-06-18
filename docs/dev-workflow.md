@@ -88,12 +88,20 @@ Before and after meaningful changes:
 npm run verify
 ```
 
+This includes frontend build, API typecheck/tests/build, and a static migration contract check.
+
 Equivalent commands:
 
 ```bash
 npm run build
 npm run typecheck:api
 npm run build:api
+```
+
+Run the migration contract check directly:
+
+```bash
+npm run migrations:check --prefix apps/api
 ```
 
 ## Environment Rules
@@ -118,6 +126,18 @@ GEMINI_API_KEY=...
 GEMINI_PIPELINE_MODEL=gemini-3.1-flash-lite
 AI_DAILY_REQUEST_LIMIT=40
 OPS_TOKEN=...
+```
+
+Check API/connected smoke env before a real backend run:
+
+```bash
+npm run env:check --prefix apps/api
+```
+
+For an API-only check that does not require `SUPABASE_ANON_KEY`:
+
+```bash
+ENV_CHECK_MODE=api npm run env:check --prefix apps/api
 ```
 
 Only set `VITE_USE_NODE_WORKSPACE_API=true` when all of these are true:
@@ -149,6 +169,12 @@ PATHFLOW_API_BASE=https://your-api-host OPS_TOKEN=your-ops-token npm run smoke:c
 For automatically generated smoke users, the script deletes the user at the end when `SUPABASE_SERVICE_ROLE_KEY` is available. Set `SMOKE_KEEP_USER=true` if you want to inspect the created account after a run.
 
 The command smoke step consumes one AI request reservation for the smoke user. Keep `AI_DAILY_REQUEST_LIMIT` at `1` or higher.
+
+To also test Gemini-backed AI feature routes, run:
+
+```bash
+SMOKE_AI_FEATURES=true npm run smoke:connected
+```
 
 - Frontend env points at that API:
 
