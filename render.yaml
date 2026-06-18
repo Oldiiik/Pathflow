@@ -3,7 +3,7 @@ services:
     name: pathflow-api
     runtime: node
     rootDir: apps/api
-    plan: starter
+    plan: free
     region: frankfurt
     buildCommand: npm ci && npm run deploy:check && npm run build
     startCommand: npm run start

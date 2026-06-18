@@ -36,6 +36,8 @@ npm run env:sync:frontend
 
 Use the checked-in `render.yaml` blueprint.
 
+The blueprint uses Render's free plan for MVP testing. Expect cold starts after inactivity; the first request can be slow while the API wakes up.
+
 Service settings:
 
 ```text
