@@ -13,6 +13,7 @@ import { fetchUniversityBio, fetchProjectReview } from "../api";
 import { backendRequest, useNodeWorkspaceApi } from "../backendClient";
 import type {
   Course,
+  ChatMessage,
   MemoryState,
   ObjectKind,
   ProjectReview,
@@ -33,6 +34,7 @@ const CHIP_LABELS: Record<ObjectKind, string> = {
 
 // What a user's workspace looks like when persisted.
 export interface PersistedWorkspace {
+  messages?: ChatMessage[];
   objects: WorkspaceObject[];
   memory: MemoryState;
   roadmap: RoadmapTask[];
@@ -113,6 +115,7 @@ export const apiWorkspaceService: WorkspaceService = {
     await backendRequest<{ workspace: PersistedWorkspace }>("/workspace", {
       method: "PUT",
       body: {
+        messages: [],
         objects: [],
         memory: {
           goals: [],

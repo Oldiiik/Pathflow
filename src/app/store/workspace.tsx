@@ -137,6 +137,7 @@ function reducer(state: State, action: Action): State {
     case "HYDRATE":
       return {
         ...state,
+        messages: action.data.messages ?? [],
         objects: action.data.objects ?? [],
         memory: { ...initialMemory, ...action.data.memory },
         roadmap: action.data.roadmap ?? [],
@@ -207,6 +208,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const memoryRef = useRef(initialMemory);
   const objectsRef = useRef<WorkspaceObject[]>([]);
   const roadmapRef = useRef<RoadmapTask[]>([]);
+  const messagesRef = useRef<ChatMessage[]>([]);
 
   useEffect(() => {
     memoryRef.current = state.memory;
@@ -217,6 +219,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     roadmapRef.current = state.roadmap;
   }, [state.roadmap]);
+  useEffect(() => {
+    messagesRef.current = state.messages;
+  }, [state.messages]);
 
   // Load this user's persisted workspace (or start fresh).
   useEffect(() => {
@@ -265,6 +270,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     if (!userId || !hydrated.current) return;
     const timeout = window.setTimeout(() => {
       workspaceService.save(userId, {
+        messages: state.messages,
         objects: state.objects,
         memory: state.memory,
         roadmap: state.roadmap,
@@ -358,6 +364,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           roadmapRef.current = nextRoadmap;
         }
         saveSnapshot({
+          messages: messagesRef.current,
           objects: objectsRef.current,
           memory: nextMemory,
           roadmap: nextRoadmap,
@@ -399,6 +406,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
                 });
               }
               saveSnapshot({
+                messages: messagesRef.current,
                 objects: nextObjects,
                 memory: nextMemoryForSave,
                 roadmap: roadmapRef.current,
@@ -452,6 +460,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           });
         }
         saveSnapshot({
+          messages: messagesRef.current,
           objects: nextObjects,
           memory: nextMemoryForSave,
           roadmap: roadmapRef.current,

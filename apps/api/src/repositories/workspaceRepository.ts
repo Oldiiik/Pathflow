@@ -9,6 +9,7 @@ import {
   type PersistedWorkspace,
   type RoadmapTask,
   type WorkspaceObject,
+  type ChatMessage,
 } from "../domain/workspaceSchemas.js";
 
 interface WorkspaceRow {
@@ -59,9 +60,15 @@ export async function loadWorkspace(userId: string): Promise<PersistedWorkspace>
       .eq("workspace_id", workspace.id)
       .order("created_at", { ascending: true }),
   ]);
+  const messagesResult = await supabaseAdmin
+    .from("workspace_messages")
+    .select("id, role, text, result_kinds")
+    .eq("workspace_id", workspace.id)
+    .order("created_at", { ascending: true });
 
   if (objectsResult.error) throw badRequest(objectsResult.error.message, "workspace_objects_load_failed");
   if (roadmapResult.error) throw badRequest(roadmapResult.error.message, "roadmap_load_failed");
+  if (messagesResult.error) throw badRequest(messagesResult.error.message, "workspace_messages_load_failed");
 
   const objects = (objectsResult.data ?? []).map((row) => ({
     id: row.id,
@@ -70,8 +77,15 @@ export async function loadWorkspace(userId: string): Promise<PersistedWorkspace>
   })) as WorkspaceObject[];
 
   const roadmap = (roadmapResult.data ?? []) as RoadmapTask[];
+  const messages = (messagesResult.data ?? []).map((row) => ({
+    id: row.id,
+    role: row.role,
+    text: row.text,
+    resultKinds: row.result_kinds?.length ? row.result_kinds : undefined,
+  })) as ChatMessage[];
 
   return PersistedWorkspaceSchema.parse({
+    messages,
     objects,
     memory: workspace.memory,
     roadmap,

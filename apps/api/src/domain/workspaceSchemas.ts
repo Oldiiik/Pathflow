@@ -109,7 +109,17 @@ export const RoadmapTaskSchema = z.object({
 
 export type RoadmapTask = z.infer<typeof RoadmapTaskSchema>;
 
+export const ChatMessageSchema = z.object({
+  id: z.string().min(1),
+  role: z.enum(["user", "system"]),
+  text: z.string().min(1),
+  resultKinds: z.array(ObjectKindSchema).optional(),
+});
+
+export type ChatMessage = z.infer<typeof ChatMessageSchema>;
+
 export const PersistedWorkspaceSchema = z.object({
+  messages: z.array(ChatMessageSchema).default([]),
   objects: z.array(WorkspaceObjectSchema).default([]),
   memory: MemoryStateSchema.default(emptyMemory),
   roadmap: z.array(RoadmapTaskSchema).default([]),
