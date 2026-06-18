@@ -1,8 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { supabase, SERVER_BASE } from "../lib/supabaseClient";
-import { backendPublicRequest, backendRequest, useNodeWorkspaceApi } from "../lib/backendClient";
-import { publicAnonKey } from "/utils/supabase/info";
+import { supabase } from "../lib/supabaseClient";
+import { backendPublicRequest, backendRequest } from "../lib/backendClient";
 import type { UserProfile } from "../lib/types";
 
 interface SignUpInput {
@@ -27,20 +26,8 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 async function loadProfile(accessToken: string): Promise<UserProfile | null> {
   try {
-    if (useNodeWorkspaceApi) {
-      const data = await backendRequest<{ profile: UserProfile | null }>("/profile", { accessToken });
-      return data.profile;
-    }
-
-    const res = await fetch(`${SERVER_BASE}/profile`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      console.error("loadProfile failed:", data?.error || res.status);
-      return null;
-    }
-    return (data.profile as UserProfile) ?? null;
+    const data = await backendRequest<{ profile: UserProfile | null }>("/profile", { accessToken });
+    return data.profile;
   } catch (err) {
     console.error("loadProfile error:", err);
     return null;
@@ -88,23 +75,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signUp = useCallback(
     async (input: SignUpInput) => {
-      if (useNodeWorkspaceApi) {
-        await backendPublicRequest<{ ok: true; userId: string }>("/auth/signup", {
-          method: "POST",
-          body: input,
-        });
-        await signIn(input.email, input.password);
-        return;
-      }
-
-      const res = await fetch(`${SERVER_BASE}/signup`, {
+      await backendPublicRequest<{ ok: true; userId: string }>("/auth/signup", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${publicAnonKey}` },
-        body: JSON.stringify(input),
+        body: input,
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Sign up failed.");
-      // Sign in immediately (email is auto-confirmed server-side).
       await signIn(input.email, input.password);
     },
     [signIn],

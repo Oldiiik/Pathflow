@@ -7,5 +7,3 @@ export const supabase = createClient(
   publicAnonKey,
   { auth: { persistSession: true, autoRefreshToken: true } },
 );
-
-export const SERVER_BASE = `https://${projectId}.supabase.co/functions/v1/make-server-6885b96b`;

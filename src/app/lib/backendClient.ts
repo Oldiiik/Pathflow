@@ -1,10 +1,15 @@
 import { supabase } from "./supabaseClient";
 
-const DEFAULT_API_BASE = "http://127.0.0.1:8787";
+function requireApiBase() {
+  const value = (import.meta.env.VITE_PATHFLOW_API_BASE as string | undefined)?.trim();
+  if (!value) {
+    throw new Error("VITE_PATHFLOW_API_BASE is required.");
+  }
 
-export const nodeApiBase =
-  (import.meta.env.VITE_PATHFLOW_API_BASE as string | undefined)?.replace(/\/$/, "") ??
-  DEFAULT_API_BASE;
+  return value.replace(/\/$/, "");
+}
+
+export const nodeApiBase = requireApiBase();
 
 export const useNodeWorkspaceApi =
   (import.meta.env.VITE_USE_NODE_WORKSPACE_API as string | undefined) === "true";

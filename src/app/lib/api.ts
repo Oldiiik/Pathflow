@@ -1,8 +1,5 @@
-import { projectId, publicAnonKey } from "/utils/supabase/info";
-import { backendRequest, useNodeWorkspaceApi } from "./backendClient";
+import { backendRequest } from "./backendClient";
 import type { MemoryState, ProjectReview, UniversityBio, UniversityData, UserProfile } from "./types";
-
-const BASE = `https://${projectId}.supabase.co/functions/v1/make-server-6885b96b`;
 
 // Calls the server, which generates the bio with gemini-3.1-flash-lite and caches it.
 export async function fetchUniversityBio(
@@ -21,30 +18,11 @@ export async function fetchUniversityBio(
     },
   };
 
-  if (useNodeWorkspaceApi) {
-    const data = await backendRequest<{ bio: UniversityBio }>("/ai/university-bio", {
-      method: "POST",
-      body: payload,
-    });
-    return data.bio;
-  }
-
-  const res = await fetch(`${BASE}/university-bio`, {
+  const data = await backendRequest<{ bio: UniversityBio }>("/ai/university-bio", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${publicAnonKey}`,
-    },
-    body: JSON.stringify(payload),
+    body: payload,
   });
-
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const msg = (data && data.error) || `University bio request failed with status ${res.status}`;
-    console.error("fetchUniversityBio error:", msg);
-    throw new Error(msg);
-  }
-  return data.bio as UniversityBio;
+  return data.bio;
 }
 
 // AI project/website review (gemini-3.1-flash-lite via the server).
@@ -57,24 +35,9 @@ export async function fetchProjectReview(
     context: { field: profile?.field, preferredPaths: profile ? [profile.field] : [] },
   };
 
-  if (useNodeWorkspaceApi) {
-    const data = await backendRequest<{ review: ProjectReview }>("/ai/project-review", {
-      method: "POST",
-      body: payload,
-    });
-    return data.review;
-  }
-
-  const res = await fetch(`${BASE}/project-review`, {
+  const data = await backendRequest<{ review: ProjectReview }>("/ai/project-review", {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${publicAnonKey}` },
-    body: JSON.stringify(payload),
+    body: payload,
   });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const msg = (data && data.error) || `Project review failed with status ${res.status}`;
-    console.error("fetchProjectReview error:", msg);
-    throw new Error(msg);
-  }
-  return data.review as ProjectReview;
+  return data.review;
 }
