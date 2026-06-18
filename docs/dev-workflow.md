@@ -68,6 +68,18 @@ Expected response:
 {"status":"ok","service":"pathflow-api","model":"gemini-3.1-flash-lite"}
 ```
 
+Run the API smoke check:
+
+```bash
+npm run smoke:api
+```
+
+If `OPS_TOKEN` is configured, include it to check database/schema readiness too:
+
+```bash
+OPS_TOKEN=your-local-ops-token npm run smoke:api
+```
+
 ## Verification
 
 Before and after meaningful changes:
@@ -101,8 +113,11 @@ HOST=127.0.0.1
 FRONTEND_ORIGIN=http://localhost:5173
 SUPABASE_URL=...
 SUPABASE_SERVICE_ROLE_KEY=...
+SUPABASE_ANON_KEY=...
 GEMINI_API_KEY=...
 GEMINI_PIPELINE_MODEL=gemini-3.1-flash-lite
+AI_DAILY_REQUEST_LIMIT=40
+OPS_TOKEN=...
 ```
 
 Only set `VITE_USE_NODE_WORKSPACE_API=true` when all of these are true:
@@ -111,6 +126,40 @@ Only set `VITE_USE_NODE_WORKSPACE_API=true` when all of these are true:
 - `apps/api/.env` has real Supabase and Gemini values.
 - Node API is running.
 - Auth/session flow is confirmed.
+
+## Connected MVP Testing
+
+You can invite friends to test the connected frontend + backend loop after this checklist passes:
+
+- Supabase migrations are applied.
+- `apps/api/.env` has real `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `GEMINI_API_KEY`, and `OPS_TOKEN`.
+- API is deployed or running on a reachable machine.
+- `npm run smoke:api` passes against the API URL:
+
+```bash
+PATHFLOW_API_BASE=https://your-api-host OPS_TOKEN=your-ops-token npm run smoke:api
+```
+
+Then run the connected smoke test. It creates a temporary smoke user, signs in through Supabase Auth, generates an MVP university object, saves workspace state, and reloads it:
+
+```bash
+PATHFLOW_API_BASE=https://your-api-host npm run smoke:connected
+```
+
+- Frontend env points at that API:
+
+```bash
+VITE_PATHFLOW_API_BASE=https://your-api-host
+VITE_USE_NODE_WORKSPACE_API=true
+```
+
+For the first friend test, verify these flows only:
+
+- sign up / sign in
+- submit a command
+- generate university, major, gaps, opportunity, and portfolio objects
+- save/reload workspace
+- open university bio and project review
 
 ## Debug Protocol
 

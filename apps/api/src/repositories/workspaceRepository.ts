@@ -79,51 +79,15 @@ export async function loadWorkspace(userId: string): Promise<PersistedWorkspace>
 }
 
 export async function saveWorkspace(userId: string, workspaceData: PersistedWorkspace): Promise<PersistedWorkspace> {
-  const workspace = await getOrCreateWorkspace(userId);
   const parsed = PersistedWorkspaceSchema.parse(workspaceData);
+  const result = await supabaseAdmin.rpc("save_workspace_atomic", {
+    p_user_id: userId,
+    p_memory: parsed.memory,
+    p_objects: parsed.objects,
+    p_roadmap: parsed.roadmap,
+  });
 
-  const memoryUpdate = await supabaseAdmin
-    .from("workspaces")
-    .update({ memory: parsed.memory })
-    .eq("id", workspace.id)
-    .eq("user_id", userId);
-
-  if (memoryUpdate.error) throw badRequest(memoryUpdate.error.message, "workspace_memory_save_failed");
-
-  const deleteObjects = await supabaseAdmin.from("workspace_objects").delete().eq("workspace_id", workspace.id);
-  if (deleteObjects.error) throw badRequest(deleteObjects.error.message, "workspace_objects_delete_failed");
-
-  if (parsed.objects.length) {
-    const insertObjects = await supabaseAdmin.from("workspace_objects").insert(
-      parsed.objects.map((object) => ({
-        id: object.id,
-        workspace_id: workspace.id,
-        user_id: userId,
-        kind: object.kind,
-        data: object.data,
-        source: "user",
-      })),
-    );
-    if (insertObjects.error) throw badRequest(insertObjects.error.message, "workspace_objects_save_failed");
-  }
-
-  const deleteRoadmap = await supabaseAdmin.from("roadmap_tasks").delete().eq("workspace_id", workspace.id);
-  if (deleteRoadmap.error) throw badRequest(deleteRoadmap.error.message, "roadmap_delete_failed");
-
-  if (parsed.roadmap.length) {
-    const insertRoadmap = await supabaseAdmin.from("roadmap_tasks").insert(
-      parsed.roadmap.map((task) => ({
-        id: task.id,
-        workspace_id: workspace.id,
-        user_id: userId,
-        label: task.label,
-        status: task.status,
-        priority: task.priority,
-        context: task.context,
-      })),
-    );
-    if (insertRoadmap.error) throw badRequest(insertRoadmap.error.message, "roadmap_save_failed");
-  }
+  if (result.error) throw badRequest(result.error.message, "workspace_save_failed");
 
   return loadWorkspace(userId);
 }
@@ -168,6 +132,7 @@ export async function logPipelineRun(input: {
   request: unknown;
   response: unknown;
   latencyMs: number;
+  errorMessage?: string;
 }) {
   const workspace = await getOrCreateWorkspace(input.userId);
   const result = await supabaseAdmin.from("ai_pipeline_runs").insert({
@@ -179,6 +144,7 @@ export async function logPipelineRun(input: {
     output: input.response,
     status: input.status,
     used_fallback: input.usedFallback,
+    error_message: input.errorMessage,
     latency_ms: input.latencyMs,
   });
 

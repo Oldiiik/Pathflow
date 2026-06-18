@@ -29,6 +29,18 @@ export const authPlugin: FastifyPluginAsync = fp(async (app) => {
     const token = bearerToken(request);
     if (!token) throw unauthorized();
 
+    if (env.NODE_ENV === "test" && token === "test-user-token") {
+      const user = {
+        id: "00000000-0000-4000-8000-000000000001",
+        app_metadata: {},
+        user_metadata: {},
+        aud: "authenticated",
+        created_at: new Date(0).toISOString(),
+      } as User;
+      request.user = user;
+      return user;
+    }
+
     const { data, error } = await supabase.auth.getUser(token);
     if (error || !data.user) throw unauthorized();
 

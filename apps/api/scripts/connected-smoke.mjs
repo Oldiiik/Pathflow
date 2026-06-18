@@ -1,0 +1,151 @@
+import "dotenv/config";
+import { randomUUID } from "node:crypto";
+import { createClient } from "@supabase/supabase-js";
+
+const apiBase = process.env.PATHFLOW_API_BASE ?? "http://127.0.0.1:8787";
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+
+const email = process.env.SMOKE_EMAIL ?? `pathflow-smoke-${Date.now()}-${randomUUID().slice(0, 8)}@example.com`;
+const password = process.env.SMOKE_PASSWORD ?? `Smoke-${randomUUID()}-9a`;
+
+function printResult(name, ok, detail) {
+  const mark = ok ? "PASS" : "FAIL";
+  console.log(`${mark} ${name}${detail ? ` - ${detail}` : ""}`);
+}
+
+async function jsonRequest(path, options = {}) {
+  try {
+    const res = await fetch(`${apiBase}${path}`, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers ?? {}),
+      },
+    });
+    const body = await res.json().catch(() => null);
+    return { res, body, error: null };
+  } catch (error) {
+    return { res: null, body: null, error };
+  }
+}
+
+let failed = false;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  printResult(
+    "connected smoke env",
+    false,
+    "SUPABASE_URL and SUPABASE_ANON_KEY are required",
+  );
+  process.exit(1);
+}
+
+const health = await jsonRequest("/health");
+printResult(
+  "GET /health",
+  Boolean(health.res?.ok),
+  health.error instanceof Error ? health.error.message : JSON.stringify(health.body),
+);
+if (!health.res?.ok) failed = true;
+
+const signup = await jsonRequest("/auth/signup", {
+  method: "POST",
+  body: JSON.stringify({
+    email,
+    password,
+    name: "Pathflow Smoke",
+    field: "Business Analytics",
+    region: "Asia",
+    avoid: "Olympiads",
+  }),
+});
+printResult(
+  "POST /auth/signup",
+  Boolean(signup.res?.ok),
+  signup.error instanceof Error ? signup.error.message : JSON.stringify(signup.body),
+);
+if (!signup.res?.ok) failed = true;
+
+const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false,
+  },
+});
+
+const sessionResult = await supabase.auth.signInWithPassword({ email, password });
+const accessToken = sessionResult.data.session?.access_token;
+printResult(
+  "Supabase signInWithPassword",
+  Boolean(accessToken),
+  sessionResult.error?.message ?? sessionResult.data.user?.id,
+);
+if (!accessToken) failed = true;
+
+async function authed(path, options = {}) {
+  return jsonRequest(path, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      ...(options.headers ?? {}),
+    },
+  });
+}
+
+if (accessToken) {
+  const profile = await authed("/profile");
+  printResult("GET /profile", Boolean(profile.res?.ok && profile.body?.profile?.name), JSON.stringify(profile.body));
+  if (!profile.res?.ok || !profile.body?.profile?.name) failed = true;
+
+  const generated = await authed("/data/generate", {
+    method: "POST",
+    body: JSON.stringify({ kind: "university" }),
+  });
+  const generatedObject = generated.body?.objects?.[0];
+  printResult(
+    "POST /data/generate",
+    Boolean(generated.res?.ok && generatedObject?.kind === "university"),
+    JSON.stringify(generated.body),
+  );
+  if (!generated.res?.ok || generatedObject?.kind !== "university") failed = true;
+
+  const save = await authed("/workspace", {
+    method: "PUT",
+    body: JSON.stringify({
+      objects: generatedObject ? [generatedObject] : [],
+      memory: {
+        goals: ["Smoke test connected backend"],
+        savedUniversities: [],
+        preferredPaths: [],
+        avoidedPaths: ["Olympiads"],
+        openGaps: [],
+        nextSteps: [],
+      },
+      roadmap: [
+        {
+          id: `smoke-task-${Date.now()}`,
+          label: "Verify connected backend",
+          status: "todo",
+          priority: "medium",
+          context: "Smoke test",
+        },
+      ],
+    }),
+  });
+  printResult("PUT /workspace", Boolean(save.res?.ok), JSON.stringify(save.body));
+  if (!save.res?.ok) failed = true;
+
+  const workspace = await authed("/workspace");
+  const savedObject = workspace.body?.workspace?.objects?.[0];
+  printResult(
+    "GET /workspace",
+    Boolean(workspace.res?.ok && savedObject?.kind === "university"),
+    JSON.stringify(workspace.body),
+  );
+  if (!workspace.res?.ok || savedObject?.kind !== "university") failed = true;
+}
+
+if (failed) {
+  process.exitCode = 1;
+}

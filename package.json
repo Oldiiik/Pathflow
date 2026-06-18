@@ -10,6 +10,8 @@
     "build:api": "npm run build --prefix apps/api",
     "typecheck:api": "npm run typecheck --prefix apps/api",
     "test:api": "npm run verify --prefix apps/api",
+    "smoke:api": "npm run smoke --prefix apps/api",
+    "smoke:connected": "npm run smoke:connected --prefix apps/api",
     "verify": "npm run build && npm run test:api"
   },
   "dependencies": {

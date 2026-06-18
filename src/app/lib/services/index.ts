@@ -119,8 +119,22 @@ export const mockDataService: DataService = {
   recommendCourses: recommendCoursesLocal,
 };
 
+export const apiDataService: DataService = {
+  async generate(kind) {
+    const data = await backendRequest<{ objects: WorkspaceObject[] }>("/data/generate", {
+      method: "POST",
+      body: { kind },
+    });
+    return data.objects;
+  },
+  universityBio: fetchUniversityBio,
+  reviewProject: fetchProjectReview,
+  listCourses: allCourses,
+  recommendCourses: recommendCoursesLocal,
+};
+
 // ── Active services (the single swap point for a real backend) ───────────────
 export const workspaceService: WorkspaceService = useNodeWorkspaceApi
   ? apiWorkspaceService
   : localWorkspaceService;
-export const dataService: DataService = mockDataService;
+export const dataService: DataService = useNodeWorkspaceApi ? apiDataService : mockDataService;

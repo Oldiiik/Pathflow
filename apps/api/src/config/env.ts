@@ -10,6 +10,8 @@ const EnvSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
   GEMINI_API_KEY: z.string().min(1).optional(),
   GEMINI_PIPELINE_MODEL: z.string().min(1).default("gemini-3.1-flash-lite"),
+  AI_DAILY_REQUEST_LIMIT: z.coerce.number().int().positive().default(40),
+  OPS_TOKEN: z.string().min(16).optional(),
 });
 
 export const env = EnvSchema.parse(process.env);

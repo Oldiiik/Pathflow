@@ -1,5 +1,5 @@
 import { projectId, publicAnonKey } from "/utils/supabase/info";
-import { backendPublicRequest, useNodeWorkspaceApi } from "./backendClient";
+import { backendRequest, useNodeWorkspaceApi } from "./backendClient";
 import type { MemoryState, ProjectReview, UniversityBio, UniversityData, UserProfile } from "./types";
 
 const BASE = `https://${projectId}.supabase.co/functions/v1/make-server-6885b96b`;
@@ -22,7 +22,7 @@ export async function fetchUniversityBio(
   };
 
   if (useNodeWorkspaceApi) {
-    const data = await backendPublicRequest<{ bio: UniversityBio }>("/ai/university-bio", {
+    const data = await backendRequest<{ bio: UniversityBio }>("/ai/university-bio", {
       method: "POST",
       body: payload,
     });
@@ -58,7 +58,7 @@ export async function fetchProjectReview(
   };
 
   if (useNodeWorkspaceApi) {
-    const data = await backendPublicRequest<{ review: ProjectReview }>("/ai/project-review", {
+    const data = await backendRequest<{ review: ProjectReview }>("/ai/project-review", {
       method: "POST",
       body: payload,
     });

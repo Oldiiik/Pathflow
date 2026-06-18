@@ -7,7 +7,9 @@ import { HttpError } from "./lib/httpError.js";
 import { authPlugin } from "./plugins/auth.js";
 import { accountRoutes } from "./routes/account.js";
 import { aiFeatureRoutes } from "./routes/aiFeatures.js";
+import { dataRoutes } from "./routes/data.js";
 import { healthRoutes } from "./routes/health.js";
+import { opsRoutes } from "./routes/ops.js";
 import { workspaceRoutes } from "./routes/workspace.js";
 
 export async function buildApp() {
@@ -63,8 +65,10 @@ export async function buildApp() {
 
   await app.register(authPlugin);
   await app.register(healthRoutes);
+  await app.register(opsRoutes);
   await app.register(accountRoutes);
   await app.register(aiFeatureRoutes);
+  await app.register(dataRoutes);
   await app.register(workspaceRoutes);
 
   return app;
