@@ -88,6 +88,8 @@ VITE_SUPABASE_ANON_KEY=your-public-anon-key
 
 The Vercel build command runs `npm run deploy:check:frontend` before `npm run build`, so production deploy fails early if the frontend points at localhost, uses the legacy Supabase project, or leaves backend workspace mode disabled.
 
+The frontend intentionally has no hardcoded Supabase fallback. Missing `VITE_SUPABASE_PROJECT_ID` or `VITE_SUPABASE_ANON_KEY` is a deployment error.
+
 ## Supabase Auth Settings
 
 In Supabase Auth URL settings, add the deployed frontend domain:
