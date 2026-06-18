@@ -12,6 +12,13 @@ function parseOrigins(value: string) {
     .filter(Boolean);
 }
 
+function parseOriginPatterns(value: string) {
+  return value
+    .split(",")
+    .map((pattern) => pattern.trim())
+    .filter(Boolean);
+}
+
 const EnvSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().positive().default(8787),
@@ -41,6 +48,27 @@ const EnvSchema = z.object({
       }
 
       return origins;
+    }),
+  FRONTEND_ORIGIN_PATTERNS: z
+    .string()
+    .default("")
+    .transform((value, ctx) => {
+      const patterns = parseOriginPatterns(value);
+      const regexes: RegExp[] = [];
+
+      for (const pattern of patterns) {
+        try {
+          regexes.push(new RegExp(pattern));
+        } catch {
+          ctx.addIssue({
+            code: "custom",
+            message: `Invalid FRONTEND_ORIGIN_PATTERNS regex: ${pattern}`,
+          });
+          return z.NEVER;
+        }
+      }
+
+      return regexes;
     }),
   SUPABASE_URL: z.string().url(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),

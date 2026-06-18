@@ -53,6 +53,7 @@ Required Render environment variables:
 NODE_ENV=production
 HOST=0.0.0.0
 FRONTEND_ORIGIN=https://your-vercel-domain.vercel.app
+FRONTEND_ORIGIN_PATTERNS=^https://your-vercel-project-[a-z0-9]+-your-team\.vercel\.app$
 SUPABASE_URL=https://your-project-ref.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=...
 SUPABASE_ANON_KEY=...
@@ -65,6 +66,7 @@ OPS_TOKEN=generate-a-long-random-value
 Do not put secret values in `render.yaml`.
 
 If the Vercel domain changes after the first deploy, update `FRONTEND_ORIGIN` on Render and redeploy the API.
+For Vercel deployment-specific URLs, prefer a tightly anchored `FRONTEND_ORIGIN_PATTERNS` value instead of allowing broad wildcard origins.
 
 Practical first deploy order:
 
@@ -98,6 +100,8 @@ In Supabase Auth URL settings, add the deployed frontend domain:
 Site URL: https://your-vercel-domain.vercel.app
 Redirect URLs: https://your-vercel-domain.vercel.app/**
 ```
+
+For friend testing, share one canonical Vercel URL when possible. If testers use Vercel deployment URLs, make sure those origins are covered by Render CORS through `FRONTEND_ORIGIN` or a strict `FRONTEND_ORIGIN_PATTERNS` regex.
 
 ## Post-Deploy Smoke
 

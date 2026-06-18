@@ -56,6 +56,25 @@ function frontendOrigins() {
     .filter(Boolean);
 }
 
+function frontendOriginPatterns() {
+  if (!hasValue("FRONTEND_ORIGIN_PATTERNS")) return [];
+  return process.env.FRONTEND_ORIGIN_PATTERNS.split(",")
+    .map((pattern) => pattern.trim())
+    .filter(Boolean);
+}
+
+function checkRegexList(key, values) {
+  for (const value of values) {
+    try {
+      new RegExp(value);
+    } catch {
+      return { ok: false, detail: `invalid regex: ${value}` };
+    }
+  }
+
+  return { ok: true, detail: values.length ? `${values.length} configured` : "not set" };
+}
+
 function decodeJwtPayload(value) {
   const [, payload] = value.split(".");
   if (!payload) return null;
@@ -113,6 +132,10 @@ for (const key of urlKeys) {
   printResult(`url ${key}`, result.ok, result.detail);
   if (!result.ok) failed = true;
 }
+
+const originPatternCheck = checkRegexList("FRONTEND_ORIGIN_PATTERNS", frontendOriginPatterns());
+printResult("regex FRONTEND_ORIGIN_PATTERNS", originPatternCheck.ok, originPatternCheck.detail);
+if (!originPatternCheck.ok) failed = true;
 
 const serviceRole = checkSupabaseJwt("SUPABASE_SERVICE_ROLE_KEY", "service_role");
 printResult("supabase SUPABASE_SERVICE_ROLE_KEY role", serviceRole.ok, serviceRole.detail);

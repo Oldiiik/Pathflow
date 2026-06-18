@@ -5,6 +5,7 @@ process.env.NODE_ENV = "test";
 process.env.PORT = "8787";
 process.env.HOST = "127.0.0.1";
 process.env.FRONTEND_ORIGIN = "http://localhost:5173,https://pathflow.example.com";
+process.env.FRONTEND_ORIGIN_PATTERNS = "^https://pathflow-[a-z0-9]+-fisuans-projects\\.vercel\\.app$";
 process.env.SUPABASE_URL = "https://example.supabase.co";
 process.env.SUPABASE_SERVICE_ROLE_KEY = "test-service-role-key";
 process.env.GEMINI_API_KEY = "test-gemini-api-key";
@@ -67,6 +68,21 @@ test("API contract", async (t) => {
     assert.equal(res.headers["access-control-allow-origin"], "https://pathflow.example.com");
     assert.match(String(res.headers["access-control-allow-methods"]), /PATCH/);
     assert.match(String(res.headers["access-control-allow-methods"]), /DELETE/);
+  });
+
+  await t.test("CORS allows configured frontend origin patterns", async () => {
+    const res = await app.inject({
+      method: "OPTIONS",
+      url: "/auth/signup",
+      headers: {
+        origin: "https://pathflow-6dkazy181-fisuans-projects.vercel.app",
+        "access-control-request-method": "POST",
+        "access-control-request-headers": "content-type",
+      },
+    });
+
+    assert.equal(res.statusCode, 204);
+    assert.equal(res.headers["access-control-allow-origin"], "https://pathflow-6dkazy181-fisuans-projects.vercel.app");
   });
 
   await t.test("CORS does not allow unknown frontend origins", async () => {
