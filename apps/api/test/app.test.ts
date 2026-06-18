@@ -52,6 +52,23 @@ test("API contract", async (t) => {
     assert.equal(res.headers["access-control-allow-origin"], "https://pathflow.example.com");
   });
 
+  await t.test("CORS allows workspace action methods", async () => {
+    const res = await app.inject({
+      method: "OPTIONS",
+      url: "/workspace/memory",
+      headers: {
+        origin: "https://pathflow.example.com",
+        "access-control-request-method": "PATCH",
+        "access-control-request-headers": "authorization,content-type",
+      },
+    });
+
+    assert.equal(res.statusCode, 204);
+    assert.equal(res.headers["access-control-allow-origin"], "https://pathflow.example.com");
+    assert.match(String(res.headers["access-control-allow-methods"]), /PATCH/);
+    assert.match(String(res.headers["access-control-allow-methods"]), /DELETE/);
+  });
+
   await t.test("CORS does not allow unknown frontend origins", async () => {
     const res = await app.inject({
       method: "OPTIONS",

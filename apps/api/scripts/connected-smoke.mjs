@@ -218,6 +218,99 @@ if (accessToken) {
   );
   if (!workspaceAfterCommand.res?.ok || !commandMessagePersisted || !commandRoadmapPersisted) failed = true;
 
+  const memoryPatch = await authed("/workspace/memory", {
+    method: "PATCH",
+    body: JSON.stringify({
+      preferredPaths: ["Smoke Preferred Path"],
+      nextSteps: ["Smoke next step"],
+    }),
+  });
+  printResult(
+    "PATCH /workspace/memory",
+    Boolean(
+      memoryPatch.res?.ok &&
+        memoryPatch.body?.memory?.preferredPaths?.includes("Smoke Preferred Path") &&
+        memoryPatch.body?.memory?.nextSteps?.includes("Smoke next step"),
+    ),
+    JSON.stringify(memoryPatch.body),
+  );
+  if (
+    !memoryPatch.res?.ok ||
+    !memoryPatch.body?.memory?.preferredPaths?.includes("Smoke Preferred Path") ||
+    !memoryPatch.body?.memory?.nextSteps?.includes("Smoke next step")
+  ) {
+    failed = true;
+  }
+
+  const actionTaskId = `smoke-action-task-${Date.now()}`;
+  const addActionTask = await authed("/workspace/roadmap", {
+    method: "POST",
+    body: JSON.stringify({
+      tasks: [
+        {
+          id: actionTaskId,
+          label: "Smoke action task",
+          status: "todo",
+          priority: "high",
+          context: "Smoke action",
+        },
+      ],
+    }),
+  });
+  printResult(
+    "POST /workspace/roadmap",
+    Boolean(addActionTask.res?.ok && addActionTask.body?.tasks?.[0]?.id === actionTaskId),
+    JSON.stringify(addActionTask.body),
+  );
+  if (!addActionTask.res?.ok || addActionTask.body?.tasks?.[0]?.id !== actionTaskId) failed = true;
+
+  const updateActionTask = await authed(`/workspace/roadmap/${encodeURIComponent(actionTaskId)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status: "done" }),
+  });
+  printResult(
+    "PATCH /workspace/roadmap/:id",
+    Boolean(updateActionTask.res?.ok),
+    JSON.stringify(updateActionTask.body),
+  );
+  if (!updateActionTask.res?.ok) failed = true;
+
+  const workspaceAfterActions = await authed("/workspace");
+  const actionMemoryPersisted =
+    workspaceAfterActions.body?.workspace?.memory?.preferredPaths?.includes("Smoke Preferred Path") &&
+    workspaceAfterActions.body?.workspace?.memory?.nextSteps?.includes("Smoke next step");
+  const actionTaskPersisted = workspaceAfterActions.body?.workspace?.roadmap?.some(
+    (task) => task.id === actionTaskId && task.status === "done",
+  );
+  printResult(
+    "GET /workspace after action endpoints",
+    Boolean(workspaceAfterActions.res?.ok && actionMemoryPersisted && actionTaskPersisted),
+    JSON.stringify(workspaceAfterActions.body),
+  );
+  if (!workspaceAfterActions.res?.ok || !actionMemoryPersisted || !actionTaskPersisted) failed = true;
+
+  const deleteActionTask = await authed(`/workspace/roadmap/${encodeURIComponent(actionTaskId)}`, {
+    method: "DELETE",
+  });
+  printResult(
+    "DELETE /workspace/roadmap/:id",
+    Boolean(deleteActionTask.res?.ok),
+    JSON.stringify(deleteActionTask.body),
+  );
+  if (!deleteActionTask.res?.ok) failed = true;
+
+  if (generatedObject?.id) {
+    const deleteObject = await authed(`/workspace/objects/${encodeURIComponent(generatedObject.id)}`, {
+      method: "DELETE",
+    });
+    printResult(
+      "DELETE /workspace/objects/:id",
+      Boolean(deleteObject.res?.ok),
+      JSON.stringify(deleteObject.body),
+    );
+    if (!deleteObject.res?.ok) failed = true;
+  }
+
   if (smokeAiFeatures) {
     const universityBio = await authed("/ai/university-bio", {
       method: "POST",

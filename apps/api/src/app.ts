@@ -31,6 +31,7 @@ export async function buildApp() {
     origin: (origin, callback) => {
       callback(null, isAllowedOrigin(origin));
     },
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     credentials: true,
   });
 

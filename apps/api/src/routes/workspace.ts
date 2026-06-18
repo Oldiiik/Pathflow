@@ -1,5 +1,11 @@
 import type { FastifyInstance, FastifyPluginAsync } from "fastify";
-import { CommandRequestSchema, SaveWorkspaceRequestSchema } from "../domain/workspaceSchemas.js";
+import { z } from "zod";
+import {
+  CommandRequestSchema,
+  MemoryPatchSchema,
+  RoadmapTaskSchema,
+  SaveWorkspaceRequestSchema,
+} from "../domain/workspaceSchemas.js";
 import { parseBody } from "../lib/validate.js";
 import { runCommandPipeline } from "../ai/pipelines/commandPipeline.js";
 import { reserveAiUsage } from "../repositories/aiUsageRepository.js";
@@ -7,9 +13,12 @@ import {
   appendWorkspaceMessage,
   applyMemoryPatch,
   appendRoadmapTasks,
+  deleteRoadmapTask,
+  deleteWorkspaceObject,
   loadWorkspace,
   logPipelineRun,
   saveWorkspace,
+  updateRoadmapTaskStatus,
 } from "../repositories/workspaceRepository.js";
 
 let taskCounter = 0;
@@ -18,6 +27,18 @@ function uid(prefix: string) {
   taskCounter += 1;
   return `${prefix}-${Date.now().toString(36)}-${taskCounter}`;
 }
+
+const IdParamsSchema = z.object({
+  id: z.string().min(1),
+});
+
+const RoadmapTasksRequestSchema = z.object({
+  tasks: z.array(RoadmapTaskSchema).min(1).max(20),
+});
+
+const RoadmapStatusRequestSchema = z.object({
+  status: RoadmapTaskSchema.shape.status,
+});
 
 async function bestEffortLogPipelineRun(app: FastifyInstance, input: Parameters<typeof logPipelineRun>[0]) {
   try {
@@ -39,6 +60,42 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
     const body = parseBody(request, SaveWorkspaceRequestSchema);
     const workspace = await saveWorkspace(user.id, body);
     return { workspace };
+  });
+
+  app.patch("/workspace/memory", async (request) => {
+    const user = await app.requireUser(request);
+    const body = parseBody(request, MemoryPatchSchema);
+    const memory = await applyMemoryPatch(user.id, body);
+    return { memory };
+  });
+
+  app.post("/workspace/roadmap", async (request) => {
+    const user = await app.requireUser(request);
+    const body = parseBody(request, RoadmapTasksRequestSchema);
+    await appendRoadmapTasks({ userId: user.id, tasks: body.tasks });
+    return { tasks: body.tasks };
+  });
+
+  app.patch("/workspace/roadmap/:id", async (request) => {
+    const user = await app.requireUser(request);
+    const params = IdParamsSchema.parse(request.params);
+    const body = parseBody(request, RoadmapStatusRequestSchema);
+    await updateRoadmapTaskStatus({ userId: user.id, taskId: params.id, status: body.status });
+    return { ok: true };
+  });
+
+  app.delete("/workspace/roadmap/:id", async (request) => {
+    const user = await app.requireUser(request);
+    const params = IdParamsSchema.parse(request.params);
+    await deleteRoadmapTask({ userId: user.id, taskId: params.id });
+    return { ok: true };
+  });
+
+  app.delete("/workspace/objects/:id", async (request) => {
+    const user = await app.requireUser(request);
+    const params = IdParamsSchema.parse(request.params);
+    await deleteWorkspaceObject({ userId: user.id, objectId: params.id });
+    return { ok: true };
   });
 
   app.post("/workspace/command", async (request) => {

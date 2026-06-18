@@ -8,6 +8,7 @@ import {
   type MemoryState,
   type PersistedWorkspace,
   type RoadmapTask,
+  type TaskStatus,
   type WorkspaceObject,
   type ChatMessage,
 } from "../domain/workspaceSchemas.js";
@@ -146,6 +147,52 @@ export async function appendRoadmapTasks(input: {
   );
 
   if (result.error) throw badRequest(result.error.message, "roadmap_tasks_save_failed");
+}
+
+export async function updateRoadmapTaskStatus(input: {
+  userId: string;
+  taskId: string;
+  status: TaskStatus;
+}) {
+  if (process.env.NODE_ENV === "test") return;
+  const result = await supabaseAdmin
+    .from("roadmap_tasks")
+    .update({ status: input.status })
+    .eq("id", input.taskId)
+    .eq("user_id", input.userId)
+    .select("id")
+    .maybeSingle();
+
+  if (result.error) throw badRequest(result.error.message, "roadmap_task_update_failed");
+  if (!result.data) throw badRequest("Roadmap task not found.", "roadmap_task_not_found");
+}
+
+export async function deleteRoadmapTask(input: {
+  userId: string;
+  taskId: string;
+}) {
+  if (process.env.NODE_ENV === "test") return;
+  const result = await supabaseAdmin
+    .from("roadmap_tasks")
+    .delete()
+    .eq("id", input.taskId)
+    .eq("user_id", input.userId);
+
+  if (result.error) throw badRequest(result.error.message, "roadmap_task_delete_failed");
+}
+
+export async function deleteWorkspaceObject(input: {
+  userId: string;
+  objectId: string;
+}) {
+  if (process.env.NODE_ENV === "test") return;
+  const result = await supabaseAdmin
+    .from("workspace_objects")
+    .delete()
+    .eq("id", input.objectId)
+    .eq("user_id", input.userId);
+
+  if (result.error) throw badRequest(result.error.message, "workspace_object_delete_failed");
 }
 
 export async function applyMemoryPatch(userId: string, patch: MemoryPatch): Promise<MemoryState> {

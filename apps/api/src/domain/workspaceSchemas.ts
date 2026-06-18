@@ -108,6 +108,7 @@ export const RoadmapTaskSchema = z.object({
 });
 
 export type RoadmapTask = z.infer<typeof RoadmapTaskSchema>;
+export type TaskStatus = RoadmapTask["status"];
 
 export const ChatMessageSchema = z.object({
   id: z.string().min(1),

@@ -45,6 +45,11 @@ export interface WorkspaceService {
   load(userId: string): Promise<PersistedWorkspace | null>;
   save(userId: string, data: PersistedWorkspace): Promise<void>;
   clear(userId: string): Promise<void>;
+  patchMemory(userId: string, patch: Partial<MemoryState>): Promise<void>;
+  addTasks(userId: string, tasks: RoadmapTask[]): Promise<void>;
+  setTaskStatus(userId: string, id: string, status: RoadmapTask["status"]): Promise<void>;
+  removeTask(userId: string, id: string): Promise<void>;
+  removeObject(userId: string, id: string): Promise<void>;
 }
 
 export interface CommandPlan {
@@ -72,6 +77,39 @@ export interface DataService {
 
 const KEY = (userId: string) => `pathflow:ws:${userId}`;
 
+function emptyMemory(): MemoryState {
+  return {
+    goals: [],
+    savedUniversities: [],
+    preferredPaths: [],
+    avoidedPaths: [],
+    openGaps: [],
+    nextSteps: [],
+  };
+}
+
+function mergeMemory(current: MemoryState | undefined, patch: Partial<MemoryState>): MemoryState {
+  const base = current ?? emptyMemory();
+  const unique = (items: string[], additions: string[] | undefined) => {
+    if (!additions) return items;
+    const next = [...items];
+    for (const item of additions) {
+      const trimmed = item.trim();
+      if (trimmed && !next.includes(trimmed)) next.push(trimmed);
+    }
+    return next;
+  };
+
+  return {
+    goals: unique(base.goals, patch.goals),
+    savedUniversities: unique(base.savedUniversities, patch.savedUniversities),
+    preferredPaths: unique(base.preferredPaths, patch.preferredPaths),
+    avoidedPaths: unique(base.avoidedPaths, patch.avoidedPaths),
+    openGaps: unique(base.openGaps, patch.openGaps),
+    nextSteps: unique(base.nextSteps, patch.nextSteps),
+  };
+}
+
 export const localWorkspaceService: WorkspaceService = {
   async load(userId) {
     try {
@@ -95,6 +133,51 @@ export const localWorkspaceService: WorkspaceService = {
     } catch (err) {
       console.error("workspace clear failed:", err);
     }
+  },
+  async patchMemory(userId, patch) {
+    const current = await this.load(userId);
+    await this.save(userId, {
+      messages: current?.messages,
+      objects: current?.objects ?? [],
+      memory: mergeMemory(current?.memory, patch),
+      roadmap: current?.roadmap ?? [],
+    });
+  },
+  async addTasks(userId, tasks) {
+    const current = await this.load(userId);
+    await this.save(userId, {
+      messages: current?.messages,
+      objects: current?.objects ?? [],
+      memory: current?.memory ?? emptyMemory(),
+      roadmap: [...(current?.roadmap ?? []), ...tasks],
+    });
+  },
+  async setTaskStatus(userId, id, status) {
+    const current = await this.load(userId);
+    await this.save(userId, {
+      messages: current?.messages,
+      objects: current?.objects ?? [],
+      memory: current?.memory ?? emptyMemory(),
+      roadmap: (current?.roadmap ?? []).map((task) => (task.id === id ? { ...task, status } : task)),
+    });
+  },
+  async removeTask(userId, id) {
+    const current = await this.load(userId);
+    await this.save(userId, {
+      messages: current?.messages,
+      objects: current?.objects ?? [],
+      memory: current?.memory ?? emptyMemory(),
+      roadmap: (current?.roadmap ?? []).filter((task) => task.id !== id),
+    });
+  },
+  async removeObject(userId, id) {
+    const current = await this.load(userId);
+    await this.save(userId, {
+      messages: current?.messages,
+      objects: (current?.objects ?? []).filter((object) => object.id !== id),
+      memory: current?.memory ?? emptyMemory(),
+      roadmap: current?.roadmap ?? [],
+    });
   },
 };
 
@@ -127,6 +210,34 @@ export const apiWorkspaceService: WorkspaceService = {
         },
         roadmap: [],
       },
+    });
+  },
+  async patchMemory(_userId, patch) {
+    await backendRequest<{ memory: MemoryState }>("/workspace/memory", {
+      method: "PATCH",
+      body: patch,
+    });
+  },
+  async addTasks(_userId, tasks) {
+    await backendRequest<{ tasks: RoadmapTask[] }>("/workspace/roadmap", {
+      method: "POST",
+      body: { tasks },
+    });
+  },
+  async setTaskStatus(_userId, id, status) {
+    await backendRequest<{ ok: true }>(`/workspace/roadmap/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: { status },
+    });
+  },
+  async removeTask(_userId, id) {
+    await backendRequest<{ ok: true }>(`/workspace/roadmap/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+  },
+  async removeObject(_userId, id) {
+    await backendRequest<{ ok: true }>(`/workspace/objects/${encodeURIComponent(id)}`, {
+      method: "DELETE",
     });
   },
 };

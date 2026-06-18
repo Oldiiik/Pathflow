@@ -477,14 +477,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       const nextMemory = mergeMemorySnapshot(memoryRef.current, patch);
       memoryRef.current = nextMemory;
       dispatch({ type: "MERGE_MEMORY", patch });
-      saveSnapshot({
-        messages: messagesRef.current,
-        objects: objectsRef.current,
-        memory: nextMemory,
-        roadmap: roadmapRef.current,
+      if (!userId) return;
+      workspaceService.patchMemory(userId, patch).catch((error) => {
+        console.error("workspace memory save failed:", error);
       });
     },
-    [mergeMemorySnapshot, saveSnapshot],
+    [mergeMemorySnapshot, userId],
   );
   const addTasks = useCallback(
     (tasks: TaskInput[]) => {
@@ -493,56 +491,48 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       const nextRoadmap = [...roadmapRef.current, ...freshTasks];
       roadmapRef.current = nextRoadmap;
       dispatch({ type: "ADD_TASKS", tasks: freshTasks });
-      saveSnapshot({
-        messages: messagesRef.current,
-        objects: objectsRef.current,
-        memory: memoryRef.current,
-        roadmap: nextRoadmap,
+      if (!userId) return;
+      workspaceService.addTasks(userId, freshTasks).catch((error) => {
+        console.error("roadmap save failed:", error);
       });
     },
-    [buildFreshRoadmapTasks, saveSnapshot],
+    [buildFreshRoadmapTasks, userId],
   );
   const setTaskStatus = useCallback(
     (id: string, status: TaskStatus) => {
       const nextRoadmap = roadmapRef.current.map((task) => (task.id === id ? { ...task, status } : task));
       roadmapRef.current = nextRoadmap;
       dispatch({ type: "SET_TASK_STATUS", id, status });
-      saveSnapshot({
-        messages: messagesRef.current,
-        objects: objectsRef.current,
-        memory: memoryRef.current,
-        roadmap: nextRoadmap,
+      if (!userId) return;
+      workspaceService.setTaskStatus(userId, id, status).catch((error) => {
+        console.error("roadmap status save failed:", error);
       });
     },
-    [saveSnapshot],
+    [userId],
   );
   const removeTask = useCallback(
     (id: string) => {
       const nextRoadmap = roadmapRef.current.filter((task) => task.id !== id);
       roadmapRef.current = nextRoadmap;
       dispatch({ type: "REMOVE_TASK", id });
-      saveSnapshot({
-        messages: messagesRef.current,
-        objects: objectsRef.current,
-        memory: memoryRef.current,
-        roadmap: nextRoadmap,
+      if (!userId) return;
+      workspaceService.removeTask(userId, id).catch((error) => {
+        console.error("roadmap remove failed:", error);
       });
     },
-    [saveSnapshot],
+    [userId],
   );
   const dismissObject = useCallback(
     (id: string) => {
       const nextObjects = objectsRef.current.filter((object) => object.id !== id);
       objectsRef.current = nextObjects;
       dispatch({ type: "DISMISS_OBJECT", id });
-      saveSnapshot({
-        messages: messagesRef.current,
-        objects: nextObjects,
-        memory: memoryRef.current,
-        roadmap: roadmapRef.current,
+      if (!userId) return;
+      workspaceService.removeObject(userId, id).catch((error) => {
+        console.error("workspace object remove failed:", error);
       });
     },
-    [saveSnapshot],
+    [userId],
   );
   const openEvidence = useCallback(
     (target: EvidenceTarget) => dispatch({ type: "OPEN_EVIDENCE", target }),
